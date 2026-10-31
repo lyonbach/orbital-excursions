@@ -72,14 +72,14 @@ const TARGET_TIME=90, SPEED_BONUS_RATE=10, SPEED_BONUS_MAX=900;
 const SAVE_KEY='orbitalExcursionsSave_v1';
 
 const MISSIONS=[
- {id:'lunar',name:'Lunar Shuttle Run',fare:500,gravity:9.81,padWidth:150,roughness:1,wind:0,startVx:18,startFuel:1,description:'A calm training run to the illuminated lunar pad.',unlockAt:0,
+ {id:'lunar',name:'Lunar Shuttle Run',fare:500,gravity:9.81,padWidth:150,roughness:1,wind:0,drag:0,startVx:18,startFuel:1,description:'A calm training run to the illuminated lunar pad.',unlockAt:0,
   environment:{title:'The Moon',body:'Earth’s only natural satellite',diameter:'3,474 km',gravity:'1.62 m/s² (16.6% of Earth)',atmosphere:'Effectively a vacuum; only a highly tenuous exosphere.',temperature:'Approximately 120 °C in sunlight to −171 °C in shadow.',hazards:'No atmospheric braking, extreme thermal swings, and abrasive regolith.',source:'Moon',url:'https://en.wikipedia.org/wiki/Moon'}},
- {id:'mars',name:'Mars Express',fare:900,gravity:5.5,padWidth:120,roughness:1.25,wind:0,startVx:26,startFuel:.9,description:'Low gravity, but a faster approach and a tighter landing zone.',unlockAt:1,
+ {id:'mars',name:'Mars Express',fare:900,gravity:5.5,padWidth:120,roughness:1.25,wind:0,drag:.015,startVx:26,startFuel:.9,description:'Low gravity, but a faster approach and a tighter landing zone.',unlockAt:1,
   environment:{title:'Mars',body:'Fourth planet from the Sun',diameter:'6,779 km',gravity:'3.72 m/s² (38% of Earth)',atmosphere:'Very thin, primarily carbon dioxide; surface pressure is a tiny fraction of Earth’s.',temperature:'Approximately −153 °C to 20 °C.',hazards:'Thin-air aerobraking, dust, low pressure, and elevated radiation exposure.',source:'Mars',url:'https://en.wikipedia.org/wiki/Mars'}},
- {id:'titan',name:'Titan Charter',fare:1400,gravity:2.8,padWidth:105,roughness:1.5,wind:7,startVx:30,startFuel:.85,description:'Thick atmosphere, crosswinds, and a narrow pad.',unlockAt:2,
+ {id:'titan',name:'Titan Charter',fare:1400,gravity:2.8,padWidth:105,roughness:1.5,wind:7,drag:.09,startVx:30,startFuel:.85,description:'Thick atmosphere, crosswinds, and a narrow pad.',unlockAt:2,
   environment:{title:'Titan',body:'Largest moon of Saturn',diameter:'5,149 km',gravity:'1.352 m/s² (13.8% of Earth)',atmosphere:'Dense nitrogen atmosphere with methane; surface pressure exceeds Earth’s.',temperature:'About −179.5 °C.',hazards:'Methane weather, hydrocarbon lakes, dense haze, and strong atmospheric drag.',source:'Titan (moon)',url:'https://en.wikipedia.org/wiki/Titan_(moon)'}},
- {id:'io',name:'Io Emergency',fare:2200,gravity:12.5,padWidth:95,roughness:1.8,wind:11,startVx:34,startFuel:.8,description:'High gravity, radiation gusts, and almost no margin for error.',unlockAt:3,
-  environment:{title:'Io',body:'Innermost Galilean moon of Jupiter',diameter:'About 3,642 km',gravity:'1.796 m/s² (18.3% of Earth)',atmosphere:'Extremely thin, dominated by sulfur dioxide.',temperature:'Cold surface, with intense local heating around volcanic features.',hazards:'Extreme volcanism, sulfur compounds, Jupiter’s radiation belts, and tidal stress.',source:'Io (moon)',url:'https://en.wikipedia.org/wiki/Io_(moon)'}}
+ {id:'io',name:'Io Emergency',fare:2200,gravity:12.5,padWidth:95,roughness:1.8,wind:11,drag:.002,startVx:34,startFuel:.8,description:'High gravity, radiation gusts, and almost no margin for error.',unlockAt:3,
+  environment:{title:'Io',body:'Innermost Galilean moon of Jupiter',diameter:'About 3,642 km',gravity:'1.796 m/s² (18.3% of Earth)',atmosphere:'Extremely thin, dominated by sulfur dioxide.',temperature:'Cold surface, with intense local heating around volcanic features.',hazards:'Extreme volcanism, sulfur compounds, radiation and tidal gusts, with negligible aerodynamic drag.',source:'Io (moon)',url:'https://en.wikipedia.org/wiki/Io_(moon)'}}
 ];
 
 const UPGRADES={
@@ -107,7 +107,7 @@ addEventListener('keydown',e=>{
 });
 addEventListener('keyup',e=>keys[e.code]=false);
 
-let ship,terrain,stars,state='title',t=0,missionTime=0,lastT=performance.now(),result=null,selectedMission=MISSIONS[0],windPhase=0;
+let ship,terrain,stars,state='title',t=0,missionTime=0,lastT=performance.now(),result=null,selectedMission=MISSIONS[0],windPhase=0,shipAccel={x:0,y:0};
 const screenEl=document.getElementById('screen'),envEl=document.getElementById('env');
 
 function makeTerrain(m){
@@ -150,7 +150,7 @@ function startMission(m){
  stars=Array.from({length:170},()=>({x:Math.random()*W,y:Math.random()*H*.72,r:Math.random()*1.5+.3,a:Math.random()*.7+.2}));
  const fuelMax=maxFuel();
  ship={x:120,y:120,vx:m.startVx,vy:0,angle:0,angVel:0,fuel:fuelMax*m.startFuel,fuelMax,hull:maxHull(),hullMax:maxHull(),crew:100,happiness:100,thrusting:false,rcsL:false,rcsR:false,gVert:0,gLat:0,prevVx:0,prevVy:0,peakG:0};
- missionTime=0;result=null;windPhase=0;
+ missionTime=0;result=null;windPhase=0;shipAccel={x:0,y:0};
  state='play';
  screenEl.style.display='none';
  screenEl.classList.add('hidden');
@@ -189,6 +189,11 @@ function update(dt){
  }
  if(s.rcsL){ax-=rcsPower();s.fuel=Math.max(0,s.fuel-1.8*dt);}
  if(s.rcsR){ax+=rcsPower();s.fuel=Math.max(0,s.fuel-1.8*dt);}
+
+ const drag=m.drag||0;
+ ax-=s.vx*drag;
+ ay-=s.vy*drag;
+ shipAccel={x:ax,y:ay};
 
  s.vx+=ax*dt;s.vy+=ay*dt;
  s.x+=s.vx*SCALE*dt;s.y+=s.vy*SCALE*dt;
@@ -261,6 +266,7 @@ function draw(){
   ctx.fillRect(p.x+8+i*((p.w-16)/4)-2,p.y-4,5,5);
  }
  drawShip();
+ drawVectors();
  document.getElementById('time').textContent=missionTime.toFixed(1);
  document.getElementById('alt').textContent=Math.max(0,Math.round((terrainYAt(ship.x)-ship.y-18)/SCALE));
  document.getElementById('vs').textContent=ship.vy.toFixed(1);
@@ -274,6 +280,52 @@ function draw(){
  document.getElementById('happyFill').style.width=ship.happiness+'%';
  document.getElementById('gvFill').style.width=Math.min(100,ship.gVert/10*100)+'%';
  document.getElementById('glFill').style.width=Math.min(100,ship.gLat/10*100)+'%';
+}
+
+function drawVector(x,y,vx,vy,scale,maxLen,color,label){
+ const mag=Math.hypot(vx,vy);
+ if(mag<.01)return;
+ const strength=Math.min(1,mag*scale/maxLen);
+ const len=Math.min(maxLen,mag*scale);
+ const ux=vx/mag,uy=vy/mag;
+ const ex=x+ux*len,ey=y+uy*len;
+ ctx.save();
+ ctx.globalAlpha=.35+strength*.65;
+ ctx.strokeStyle=color;ctx.fillStyle=color;ctx.lineWidth=2+strength*2;
+ ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(ex,ey);ctx.stroke();
+ const head=5+strength*5;
+ const angle=Math.atan2(uy,ux);
+ ctx.beginPath();
+ ctx.moveTo(ex,ey);
+ ctx.lineTo(ex-head*Math.cos(angle-.42),ey-head*Math.sin(angle-.42));
+ ctx.lineTo(ex-head*Math.cos(angle+.42),ey-head*Math.sin(angle+.42));
+ ctx.closePath();ctx.fill();
+ ctx.globalAlpha=.55+strength*.45;
+ ctx.font='10px ui-monospace,monospace';ctx.fillText(label,ex+6,ey-6);
+ ctx.restore();
+}
+
+function drawVectors(){
+ const cx=W-105,cy=H-105;
+ ctx.save();
+ ctx.globalAlpha=.75;
+ ctx.fillStyle='rgba(8,14,28,.65)';
+ ctx.strokeStyle='#2b3d66';
+ ctx.beginPath();ctx.arc(cx,cy,82,0,7);ctx.fill();ctx.stroke();
+ ctx.restore();
+
+ const speed=Math.hypot(ship.vx,ship.vy);
+ drawVector(cx,cy,ship.vx,ship.vy,3.2,68,'#59c2ff',`V ${speed.toFixed(1)}`);
+
+ const acc=Math.hypot(shipAccel.x,shipAccel.y);
+ if(speed>.05&&acc>.05){
+  const along=(shipAccel.x*ship.vx+shipAccel.y*ship.vy)/speed;
+  const alongX=shipAccel.x*(along/acc),alongY=shipAccel.y*(along/acc);
+  if(along>=0)drawVector(cx,cy,alongX,alongY,3.2,52,'#7ee787',`A ${acc.toFixed(1)}`);
+  else drawVector(cx,cy,alongX,alongY,3.2,52,'#ff7b72',`DEC ${Math.abs(along).toFixed(1)}`);
+ }else if(acc>.05){
+  drawVector(cx,cy,shipAccel.x,shipAccel.y,3.2,52,'#7ee787',`A ${acc.toFixed(1)}`);
+ }
 }
 
 function drawShip(){
