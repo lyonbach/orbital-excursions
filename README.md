@@ -15,10 +15,20 @@ Open `index.html` in any modern browser.
 
 Deliver passengers to the illuminated landing pad without damaging the hull or crew, while managing limited fuel and avoiding excessive G-forces.
 
-## Current systems
+## Systems
 
-- Gravity, thrust, rotation, and RCS movement
+- Separate vertical and lateral G-force tracking
 - Limited fuel
 - Ground-impact hull damage
-- Passenger damage from high acceleration
+- Passenger health and happiness affected by acceleration and landing quality
 - Landing-pad detection and mission scoring
+
+## Payout
+
+```text
+money = 500
+      + (fuelPercent / 100) * 500
+      + happinessPercent * 5
+```
+
+Failed missions pay nothing.

@@ -8,12 +8,12 @@
   #wrap{position:relative;width:100vw;height:100vh}
   canvas{display:block;width:100%;height:100%}
   #hud{position:absolute;inset:0;pointer-events:none;padding:14px;font-size:13px;line-height:1.35}
-  .panel{background:rgba(8,14,28,.62);border:1px solid #2b3d66;border-radius:8px;padding:10px 12px;width:270px}
+  .panel{background:rgba(8,14,28,.62);border:1px solid #2b3d66;border-radius:8px;padding:10px 12px;width:280px}
   .bar{height:9px;background:#16233d;border:1px solid #31456f;border-radius:5px;margin:3px 0 8px}
   .fill{height:100%;border-radius:4px}
-  #fuelFill{background:#59c2ff} #hullFill{background:#7ee787} #crewFill{background:#ffd166}
-  #gFill{background:#ff7b72}
-  #msg{position:absolute;left:50%;top:18%;transform:translateX(-50%);text-align:center;background:rgba(8,14,28,.82);border:1px solid #2b3d66;border-radius:10px;padding:18px 22px;max-width:560px}
+  #fuelFill{background:#59c2ff} #hullFill{background:#7ee787} #crewFill{background:#ffd166} #happyFill{background:#c792ea}
+  #gvFill{background:#ff7b72} #glFill{background:#ffa657}
+  #msg{position:absolute;left:50%;top:16%;transform:translateX(-50%);text-align:center;background:rgba(8,14,28,.86);border:1px solid #2b3d66;border-radius:10px;padding:18px 22px;max-width:620px}
   #msg h1{margin:0 0 8px;font-size:22px;color:#8ab4ff}
   #msg p{margin:6px 0;font-size:14px}
   kbd{background:#16233d;border:1px solid #31456f;border-radius:4px;padding:1px 5px}
@@ -30,8 +30,10 @@
     <div>H-SPEED <span id="hs">0.0</span> m/s</div>
     <div>FUEL</div><div class="bar"><div id="fuelFill" class="fill" style="width:100%"></div></div>
     <div>HULL</div><div class="bar"><div id="hullFill" class="fill" style="width:100%"></div></div>
-    <div>PASSENGERS</div><div class="bar"><div id="crewFill" class="fill" style="width:100%"></div></div>
-    <div>G-FORCE <span id="g">1.0</span> G</div><div class="bar"><div id="gFill" class="fill" style="width:0%"></div></div>
+    <div>PASSENGER HEALTH</div><div class="bar"><div id="crewFill" class="fill" style="width:100%"></div></div>
+    <div>PASSENGER HAPPINESS</div><div class="bar"><div id="happyFill" class="fill" style="width:100%"></div></div>
+    <div>VERTICAL G <span id="gv">0.0</span></div><div class="bar"><div id="gvFill" class="fill" style="width:0%"></div></div>
+    <div>LATERAL G <span id="gl">0.0</span></div><div class="bar"><div id="glFill" class="fill" style="width:0%"></div></div>
   </div>
 </div>
 <div id="msg">
@@ -39,7 +41,7 @@
   <p>You are Captain of a near-future tourism shuttle.</p>
   <p>Deliver your passengers to the illuminated landing pad.</p>
   <p><kbd>W</kbd>/<kbd>&uarr;</kbd> main engine &nbsp; <kbd>A</kbd>/<kbd>D</kbd> RCS &nbsp; <kbd>Q</kbd>/<kbd>E</kbd> rotate</p>
-  <p>Land gently. Avoid high G-forces. Fuel is limited.</p>
+  <p>Land gently, preserve fuel, and keep passengers comfortable.</p>
   <p>Press <kbd>Enter</kbd> to begin.</p>
 </div>
 </div>
@@ -51,6 +53,7 @@ addEventListener('resize',resize);resize();
 
 const G=9.81, SCALE=8;
 const SAFE_VS=2.2, SAFE_HS=1.6, SAFE_G=3.5, HARD_G=6.5;
+const BASE_FARE=500, FUEL_BONUS_MAX=500, HAPPINESS_RATE=5;
 
 const keys={};
 addEventListener('keydown',e=>{
@@ -60,7 +63,7 @@ addEventListener('keydown',e=>{
 });
 addEventListener('keyup',e=>keys[e.code]=false);
 
-let ship, terrain, stars, state='menu', t=0, lastT=performance.now(), score=null;
+let ship, terrain, stars, state='menu', t=0, lastT=performance.now(), result=null;
 
 function makeTerrain(){
   const pts=[]; let x=-200;
@@ -73,8 +76,8 @@ function makeTerrain(){
 function reset(){
   terrain=makeTerrain();
   stars=Array.from({length:170},()=>({x:Math.random()*W,y:Math.random()*H*0.72,r:Math.random()*1.5+.3,a:Math.random()*.7+.2}));
-  ship={x:120,y:120,vx:18,vy:0,angle:0,angVel:0,fuel:100,hull:100,crew:100,thrusting:false,rcsL:false,rcsR:false,g:1,prevVx:0,prevVy:0};
-  score=null;
+  ship={x:120,y:120,vx:18,vy:0,angle:0,angVel:0,fuel:100,hull:100,crew:100,happiness:100,thrusting:false,rcsL:false,rcsR:false,gVert:0,gLat:0,prevVx:0,prevVy:0,peakG:0};
+  result=null;
 }
 
 function startOrRestart(){
@@ -120,17 +123,23 @@ function update(dt){
   s.x+=s.vx*SCALE*dt; s.y+=s.vy*SCALE*dt;
 
   const dvx=(s.vx-s.prevVx)/dt, dvy=(s.vy-s.prevVy)/dt;
-  s.g=Math.hypot(dvx,dvy)/G;
+  s.gLat=Math.abs(dvx)/G;
+  s.gVert=Math.abs(dvy)/G;
+  const totalG=Math.hypot(dvx,dvy)/G;
+  s.peakG=Math.max(s.peakG,totalG);
 
-  if(s.g>SAFE_G){
-    const excess=s.g-SAFE_G;
-    s.crew=Math.max(0,s.crew-excess*(s.g>HARD_G?9:3.2)*dt);
-  } else if(s.g<1.5&&s.crew<100){
+  if(totalG>SAFE_G){
+    const excess=totalG-SAFE_G;
+    const stress=excess*(totalG>HARD_G?9:3.2)*dt;
+    s.crew=Math.max(0,s.crew-stress);
+    s.happiness=Math.max(0,s.happiness-stress*1.25);
+  } else if(totalG<1.5){
     s.crew=Math.min(100,s.crew+0.7*dt);
+    s.happiness=Math.min(100,s.happiness+1.1*dt);
   }
 
-  if(s.x<20){s.x=20;s.vx=Math.abs(s.vx)*.4;s.hull=Math.max(0,s.hull-2);}
-  if(s.x>W-20){s.x=W-20;s.vx=-Math.abs(s.vx)*.4;s.hull=Math.max(0,s.hull-2);}
+  if(s.x<20){s.x=20;s.vx=Math.abs(s.vx)*.4;s.hull=Math.max(0,s.hull-2);s.happiness=Math.max(0,s.happiness-3);}
+  if(s.x>W-20){s.x=W-20;s.vx=-Math.abs(s.vx)*.4;s.hull=Math.max(0,s.hull-2);s.happiness=Math.max(0,s.happiness-3);}
   if(s.y<20){s.y=20;s.vy=Math.max(s.vy,0);}
 
   const gy=terrainYAt(s.x);
@@ -141,18 +150,23 @@ function update(dt){
     const impact=Math.max(0,vs-SAFE_VS)*8+Math.max(0,hs-SAFE_HS)*5;
     s.hull=Math.max(0,s.hull-impact);
     s.crew=Math.max(0,s.crew-impact*0.8);
+    s.happiness=Math.max(0,s.happiness-impact*1.5);
     s.vx*=0.15; s.vy=0; s.angVel*=0.2;
 
     if(s.hull<=0||s.crew<=0||(!onPad&&vs>SAFE_VS*2.2)){
-      state='over'; score=calcScore(); showMessage(false);
+      state='over'; result=calculatePayout(false); showMessage(false);
     } else if(onPad&&vs<=SAFE_VS&&hs<=SAFE_HS&&Math.abs(s.angle)<0.35){
-      state='won'; score=calcScore(); showMessage(true);
+      state='won'; result=calculatePayout(true); showMessage(true);
     }
   }
 }
 
-function calcScore(){
-  return Math.round(ship.hull*3+ship.crew*4+ship.fuel*1.5+(ship.hull>70?150:0));
+function calculatePayout(success){
+  const s=ship;
+  const fuelBonus=Math.round((s.fuel/100)*FUEL_BONUS_MAX);
+  const happinessBonus=Math.round(s.happiness*HAPPINESS_RATE);
+  const money=success?BASE_FARE+fuelBonus+happinessBonus:0;
+  return {money,fuelBonus,happinessBonus};
 }
 
 function draw(){
@@ -184,11 +198,14 @@ function draw(){
   document.getElementById('alt').textContent=Math.max(0,Math.round((terrainYAt(ship.x)-ship.y-18)/SCALE));
   document.getElementById('vs').textContent=ship.vy.toFixed(1);
   document.getElementById('hs').textContent=ship.vx.toFixed(1);
-  document.getElementById('g').textContent=ship.g.toFixed(1);
+  document.getElementById('gv').textContent=ship.gVert.toFixed(1);
+  document.getElementById('gl').textContent=ship.gLat.toFixed(1);
   document.getElementById('fuelFill').style.width=ship.fuel+'%';
   document.getElementById('hullFill').style.width=ship.hull+'%';
   document.getElementById('crewFill').style.width=ship.crew+'%';
-  document.getElementById('gFill').style.width=Math.min(100,ship.g/10*100)+'%';
+  document.getElementById('happyFill').style.width=ship.happiness+'%';
+  document.getElementById('gvFill').style.width=Math.min(100,ship.gVert/10*100)+'%';
+  document.getElementById('glFill').style.width=Math.min(100,ship.gLat/10*100)+'%';
 }
 
 function drawShip(){
@@ -213,12 +230,12 @@ function drawShip(){
   ctx.restore();
 }
 
-function showMessage(won){
+function showMessage(success){
   const m=document.getElementById('msg');m.classList.remove('hidden');
-  if(won){
-    m.innerHTML=`<h1>MISSION COMPLETE</h1><p>Passengers delivered safely.</p><p>Hull: ${Math.round(ship.hull)}% &nbsp; Crew: ${Math.round(ship.crew)}% &nbsp; Fuel: ${Math.round(ship.fuel)}%</p><p><b>Score: ${score}</b></p><p>Press <kbd>Enter</kbd> to fly again.</p>`;
+  if(success){
+    m.innerHTML=`<h1>MISSION COMPLETE</h1><p>Passengers delivered safely.</p><p>Hull: ${Math.round(ship.hull)}% &nbsp; Health: ${Math.round(ship.crew)}% &nbsp; Happiness: ${Math.round(ship.happiness)}%</p><p>Base fare: ${BASE_FARE} cr<br>Fuel bonus: ${result.fuelBonus} cr<br>Happiness bonus: ${result.happinessBonus} cr</p><p><b>Total earned: ${result.money} credits</b></p><p>Peak G: ${ship.peakG.toFixed(1)} G</p><p>Press <kbd>Enter</kbd> to fly again.</p>`;
   }else{
-    m.innerHTML=`<h1>MISSION FAILED</h1><p>${ship.hull<=0?'The shuttle was destroyed.':ship.crew<=0?'Passengers did not survive the flight.':'You missed the landing zone.'}</p><p>Press <kbd>Enter</kbd> to retry.</p>`;
+    m.innerHTML=`<h1>MISSION FAILED</h1><p>${ship.hull<=0?'The shuttle was destroyed.':ship.crew<=0?'Passengers did not survive the flight.':'You missed the landing zone.'}</p><p>No payment was issued.</p><p>Press <kbd>Enter</kbd> to retry.</p>`;
   }
 }
 
