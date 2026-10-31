@@ -317,6 +317,9 @@ function drawVectors(){
  const speed=Math.hypot(ship.vx,ship.vy);
  drawVector(cx,cy,ship.vx,ship.vy,3.2,68,'#59c2ff',`V ${speed.toFixed(1)}`);
 
+ const gravity=selectedMission.gravity;
+ drawVector(cx,cy,0,gravity,3.2,52,'#ffd166',`G ${gravity.toFixed(1)}`);
+
  const acc=Math.hypot(shipAccel.x,shipAccel.y);
  if(speed>.05&&acc>.05){
   const along=(shipAccel.x*ship.vx+shipAccel.y*ship.vy)/speed;
