@@ -13,7 +13,7 @@
   .fill{height:100%;border-radius:4px}
   #fuelFill{background:#59c2ff} #hullFill{background:#7ee787} #crewFill{background:#ffd166} #happyFill{background:#c792ea}
   #gvFill{background:#ff7b72} #glFill{background:#ffa657}
-  #msg{position:absolute;left:50%;top:16%;transform:translateX(-50%);text-align:center;background:rgba(8,14,28,.86);border:1px solid #2b3d66;border-radius:10px;padding:18px 22px;max-width:620px}
+  #msg{position:absolute;left:50%;top:16%;transform:translateX(-50%);text-align:center;background:rgba(8,14,28,.86);border:1px solid #2b3d66;border-radius:10px;padding:18px 22px;max-width:640px}
   #msg h1{margin:0 0 8px;font-size:22px;color:#8ab4ff}
   #msg p{margin:6px 0;font-size:14px}
   kbd{background:#16233d;border:1px solid #31456f;border-radius:4px;padding:1px 5px}
@@ -25,6 +25,7 @@
 <canvas id="game"></canvas>
 <div id="hud">
   <div class="panel">
+    <div>TIME <span id="time">0.0</span> s</div>
     <div>ALTITUDE <span id="alt">0</span> m</div>
     <div>V-SPEED <span id="vs">0.0</span> m/s</div>
     <div>H-SPEED <span id="hs">0.0</span> m/s</div>
@@ -41,7 +42,7 @@
   <p>You are Captain of a near-future tourism shuttle.</p>
   <p>Deliver your passengers to the illuminated landing pad.</p>
   <p><kbd>W</kbd>/<kbd>&uarr;</kbd> main engine &nbsp; <kbd>A</kbd>/<kbd>D</kbd> RCS &nbsp; <kbd>Q</kbd>/<kbd>E</kbd> rotate</p>
-  <p>Land gently, preserve fuel, and keep passengers comfortable.</p>
+  <p>Land gently, preserve fuel, keep passengers comfortable, and arrive quickly.</p>
   <p>Press <kbd>Enter</kbd> to begin.</p>
 </div>
 </div>
@@ -54,6 +55,7 @@ addEventListener('resize',resize);resize();
 const G=9.81, SCALE=8;
 const SAFE_VS=2.2, SAFE_HS=1.6, SAFE_G=3.5, HARD_G=6.5;
 const BASE_FARE=500, FUEL_BONUS_MAX=500, HAPPINESS_RATE=5;
+const TARGET_TIME=90, SPEED_BONUS_RATE=10, SPEED_BONUS_MAX=900;
 
 const keys={};
 addEventListener('keydown',e=>{
@@ -63,7 +65,7 @@ addEventListener('keydown',e=>{
 });
 addEventListener('keyup',e=>keys[e.code]=false);
 
-let ship, terrain, stars, state='menu', t=0, lastT=performance.now(), result=null;
+let ship, terrain, stars, state='menu', t=0, missionTime=0, lastT=performance.now(), result=null;
 
 function makeTerrain(){
   const pts=[]; let x=-200;
@@ -77,7 +79,7 @@ function reset(){
   terrain=makeTerrain();
   stars=Array.from({length:170},()=>({x:Math.random()*W,y:Math.random()*H*0.72,r:Math.random()*1.5+.3,a:Math.random()*.7+.2}));
   ship={x:120,y:120,vx:18,vy:0,angle:0,angVel:0,fuel:100,hull:100,crew:100,happiness:100,thrusting:false,rcsL:false,rcsR:false,gVert:0,gLat:0,prevVx:0,prevVy:0,peakG:0};
-  result=null;
+  missionTime=0; result=null;
 }
 
 function startOrRestart(){
@@ -96,7 +98,7 @@ function terrainYAt(x){
 }
 
 function update(dt){
-  t+=dt;
+  t+=dt; missionTime+=dt;
   const s=ship;
   s.prevVx=s.vx; s.prevVy=s.vy;
 
@@ -165,8 +167,9 @@ function calculatePayout(success){
   const s=ship;
   const fuelBonus=Math.round((s.fuel/100)*FUEL_BONUS_MAX);
   const happinessBonus=Math.round(s.happiness*HAPPINESS_RATE);
-  const money=success?BASE_FARE+fuelBonus+happinessBonus:0;
-  return {money,fuelBonus,happinessBonus};
+  const speedBonus=Math.min(SPEED_BONUS_MAX,Math.max(0,Math.round((TARGET_TIME-missionTime)*SPEED_BONUS_RATE)));
+  const money=success?BASE_FARE+fuelBonus+happinessBonus+speedBonus:0;
+  return {money,fuelBonus,happinessBonus,speedBonus};
 }
 
 function draw(){
@@ -195,6 +198,7 @@ function draw(){
 
   drawShip();
 
+  document.getElementById('time').textContent=missionTime.toFixed(1);
   document.getElementById('alt').textContent=Math.max(0,Math.round((terrainYAt(ship.x)-ship.y-18)/SCALE));
   document.getElementById('vs').textContent=ship.vy.toFixed(1);
   document.getElementById('hs').textContent=ship.vx.toFixed(1);
@@ -225,9 +229,7 @@ function drawShip(){
   ctx.fillStyle='#7fa8ff';ctx.fillRect(-7,-8,14,7);
   ctx.strokeStyle='#9fb4d8';ctx.lineWidth=3;
   ctx.beginPath();ctx.moveTo(-9,11);ctx.lineTo(-15,19);ctx.moveTo(9,11);ctx.lineTo(15,19);ctx.stroke();
-  // A moves ship left: right-side RCS fires.
   if(s.rcsL&&s.fuel>0){ctx.fillStyle='rgba(120,220,255,.85)';ctx.fillRect(18,-2,8+Math.random()*6,3);}
-  // D moves ship right: left-side RCS fires.
   if(s.rcsR&&s.fuel>0){ctx.fillStyle='rgba(120,220,255,.85)';ctx.fillRect(-18,-2,-8-Math.random()*6,3);}
   ctx.restore();
 }
@@ -235,7 +237,7 @@ function drawShip(){
 function showMessage(success){
   const m=document.getElementById('msg');m.classList.remove('hidden');
   if(success){
-    m.innerHTML=`<h1>MISSION COMPLETE</h1><p>Passengers delivered safely.</p><p>Hull: ${Math.round(ship.hull)}% &nbsp; Health: ${Math.round(ship.crew)}% &nbsp; Happiness: ${Math.round(ship.happiness)}%</p><p>Base fare: ${BASE_FARE} cr<br>Fuel bonus: ${result.fuelBonus} cr<br>Happiness bonus: ${result.happinessBonus} cr</p><p><b>Total earned: ${result.money} credits</b></p><p>Peak G: ${ship.peakG.toFixed(1)} G</p><p>Press <kbd>Enter</kbd> to fly again.</p>`;
+    m.innerHTML=`<h1>MISSION COMPLETE</h1><p>Passengers delivered safely.</p><p>Mission time: ${missionTime.toFixed(1)} s</p><p>Hull: ${Math.round(ship.hull)}% &nbsp; Health: ${Math.round(ship.crew)}% &nbsp; Happiness: ${Math.round(ship.happiness)}%</p><p>Base fare: ${BASE_FARE} cr<br>Fuel bonus: ${result.fuelBonus} cr<br>Happiness bonus: ${result.happinessBonus} cr<br>Speed bonus: ${result.speedBonus} cr</p><p><b>Total earned: ${result.money} credits</b></p><p>Peak G: ${ship.peakG.toFixed(1)} G</p><p>Press <kbd>Enter</kbd> to fly again.</p>`;
   }else{
     m.innerHTML=`<h1>MISSION FAILED</h1><p>${ship.hull<=0?'The shuttle was destroyed.':ship.crew<=0?'Passengers did not survive the flight.':'You missed the landing zone.'}</p><p>No payment was issued.</p><p>Press <kbd>Enter</kbd> to retry.</p>`;
   }

@@ -13,15 +13,7 @@ Open `index.html` in any modern browser.
 
 ## Goal
 
-Deliver passengers to the illuminated landing pad without damaging the hull or crew, while managing limited fuel and avoiding excessive G-forces.
-
-## Systems
-
-- Separate vertical and lateral G-force tracking
-- Limited fuel
-- Ground-impact hull damage
-- Passenger health and happiness affected by acceleration and landing quality
-- Landing-pad detection and mission scoring
+Deliver passengers to the illuminated landing pad quickly, safely, and comfortably while managing limited fuel.
 
 ## Payout
 
@@ -29,6 +21,7 @@ Deliver passengers to the illuminated landing pad without damaging the hull or c
 money = 500
       + (fuelPercent / 100) * 500
       + happinessPercent * 5
+      + max(0, (90 - missionSeconds) * 10)
 ```
 
-Failed missions pay nothing.
+The speed bonus is capped at 900 credits. Failed missions pay nothing.
