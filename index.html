@@ -13,6 +13,14 @@
   .fill{height:100%;border-radius:4px}
   #fuelFill{background:#59c2ff} #hullFill{background:#7ee787} #crewFill{background:#ffd166} #happyFill{background:#c792ea}
   #gvFill{background:#ff7b72} #glFill{background:#ffa657}
+  #env{position:absolute;top:14px;right:14px;width:300px;max-height:calc(100vh - 28px);overflow:auto;background:rgba(8,14,28,.68);border:1px solid #2b3d66;border-radius:8px;padding:12px;font-size:12.5px;line-height:1.45}
+  #env h2{margin:0 0 7px;color:#8ab4ff;font-size:16px}
+  #env dl{margin:0}
+  #env dt{color:#9fb4d8;font-size:11px;text-transform:uppercase;letter-spacing:.5px;margin-top:7px}
+  #env dd{margin:1px 0 0}
+  #env a{color:#7fd1ff;text-decoration:none}
+  #env a:hover{text-decoration:underline}
+  .source{margin-top:9px;padding-top:7px;border-top:1px solid #2b3d66;color:#9fb4d8;font-size:11px}
   #screen{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(4,7,15,.88);backdrop-filter:blur(3px)}
   .card{width:min(760px,92vw);max-height:88vh;overflow:auto;background:rgba(8,14,28,.94);border:1px solid #2b3d66;border-radius:12px;padding:24px}
   h1{margin:0;color:#8ab4ff;font-size:30px;letter-spacing:2px}
@@ -48,6 +56,7 @@
     <div>LATERAL G <span id="gl">0.0</span></div><div class="bar"><div id="glFill" class="fill" style="width:0%"></div></div>
   </div>
 </div>
+<div id="env" class="hidden"></div>
 <div id="screen"><div id="screenCard" class="card"></div></div>
 </div>
 <script>
@@ -63,10 +72,14 @@ const TARGET_TIME=90, SPEED_BONUS_RATE=10, SPEED_BONUS_MAX=900;
 const SAVE_KEY='orbitalExcursionsSave_v1';
 
 const MISSIONS=[
- {id:'lunar',name:'Lunar Shuttle Run',fare:500,gravity:9.81,padWidth:150,roughness:1,wind:0,startVx:18,startFuel:1,description:'A calm training run to the illuminated lunar pad.',unlockAt:0},
- {id:'mars',name:'Mars Express',fare:900,gravity:5.5,padWidth:120,roughness:1.25,wind:0,startVx:26,startFuel:.9,description:'Low gravity, but a faster approach and a tighter landing zone.',unlockAt:1},
- {id:'titan',name:'Titan Charter',fare:1400,gravity:2.8,padWidth:105,roughness:1.5,wind:7,startVx:30,startFuel:.85,description:'Thick atmosphere, crosswinds, and a narrow pad.',unlockAt:2},
- {id:'io',name:'Io Emergency',fare:2200,gravity:12.5,padWidth:95,roughness:1.8,wind:11,startVx:34,startFuel:.8,description:'High gravity, radiation gusts, and almost no margin for error.',unlockAt:3}
+ {id:'lunar',name:'Lunar Shuttle Run',fare:500,gravity:9.81,padWidth:150,roughness:1,wind:0,startVx:18,startFuel:1,description:'A calm training run to the illuminated lunar pad.',unlockAt:0,
+  environment:{title:'The Moon',body:'Earth’s only natural satellite',diameter:'3,474 km',gravity:'1.62 m/s² (16.6% of Earth)',atmosphere:'Effectively a vacuum; only a highly tenuous exosphere.',temperature:'Approximately 120 °C in sunlight to −171 °C in shadow.',hazards:'No atmospheric braking, extreme thermal swings, and abrasive regolith.',source:'Moon',url:'https://en.wikipedia.org/wiki/Moon'}},
+ {id:'mars',name:'Mars Express',fare:900,gravity:5.5,padWidth:120,roughness:1.25,wind:0,startVx:26,startFuel:.9,description:'Low gravity, but a faster approach and a tighter landing zone.',unlockAt:1,
+  environment:{title:'Mars',body:'Fourth planet from the Sun',diameter:'6,779 km',gravity:'3.72 m/s² (38% of Earth)',atmosphere:'Very thin, primarily carbon dioxide; surface pressure is a tiny fraction of Earth’s.',temperature:'Approximately −153 °C to 20 °C.',hazards:'Thin-air aerobraking, dust, low pressure, and elevated radiation exposure.',source:'Mars',url:'https://en.wikipedia.org/wiki/Mars'}},
+ {id:'titan',name:'Titan Charter',fare:1400,gravity:2.8,padWidth:105,roughness:1.5,wind:7,startVx:30,startFuel:.85,description:'Thick atmosphere, crosswinds, and a narrow pad.',unlockAt:2,
+  environment:{title:'Titan',body:'Largest moon of Saturn',diameter:'5,149 km',gravity:'1.352 m/s² (13.8% of Earth)',atmosphere:'Dense nitrogen atmosphere with methane; surface pressure exceeds Earth’s.',temperature:'About −179.5 °C.',hazards:'Methane weather, hydrocarbon lakes, dense haze, and strong atmospheric drag.',source:'Titan (moon)',url:'https://en.wikipedia.org/wiki/Titan_(moon)'}},
+ {id:'io',name:'Io Emergency',fare:2200,gravity:12.5,padWidth:95,roughness:1.8,wind:11,startVx:34,startFuel:.8,description:'High gravity, radiation gusts, and almost no margin for error.',unlockAt:3,
+  environment:{title:'Io',body:'Innermost Galilean moon of Jupiter',diameter:'About 3,642 km',gravity:'1.796 m/s² (18.3% of Earth)',atmosphere:'Extremely thin, dominated by sulfur dioxide.',temperature:'Cold surface, with intense local heating around volcanic features.',hazards:'Extreme volcanism, sulfur compounds, Jupiter’s radiation belts, and tidal stress.',source:'Io (moon)',url:'https://en.wikipedia.org/wiki/Io_(moon)'}}
 ];
 
 const UPGRADES={
@@ -95,7 +108,7 @@ addEventListener('keydown',e=>{
 addEventListener('keyup',e=>keys[e.code]=false);
 
 let ship,terrain,stars,state='title',t=0,missionTime=0,lastT=performance.now(),result=null,selectedMission=MISSIONS[0],windPhase=0;
-const screenEl=document.getElementById('screen');
+const screenEl=document.getElementById('screen'),envEl=document.getElementById('env');
 
 function makeTerrain(m){
  const pts=[]; let x=-200;
@@ -114,6 +127,23 @@ function enginePower(){return 26+3*save.upgrades.engine;}
 function rcsPower(){return 6+1.5*save.upgrades.rcs;}
 function hullResistance(){return 1-.08*save.upgrades.hull;}
 
+function showEnvironment(m){
+ const e=m.environment;
+ envEl.innerHTML=`
+  <h2>${e.title}</h2>
+  <dl>
+   <dt>Body</dt><dd>${e.body}</dd>
+   <dt>Diameter</dt><dd>${e.diameter}</dd>
+   <dt>Surface gravity</dt><dd>${e.gravity}</dd>
+   <dt>Atmosphere</dt><dd>${e.atmosphere}</dd>
+   <dt>Temperature</dt><dd>${e.temperature}</dd>
+   <dt>Operational hazards</dt><dd>${e.hazards}</dd>
+  </dl>
+  <div class="source">Source: <a href="${e.url}" target="_blank" rel="noopener noreferrer">Wikipedia — ${e.source}</a></div>
+ `;
+ envEl.classList.remove('hidden');
+}
+
 function startMission(m){
  selectedMission=m;
  terrain=makeTerrain(m);
@@ -125,6 +155,7 @@ function startMission(m){
  screenEl.style.display='none';
  screenEl.classList.add('hidden');
  document.getElementById('hud').classList.remove('hidden');
+ showEnvironment(m);
 }
 
 function terrainYAt(x){
@@ -266,6 +297,7 @@ function showScreen(html){
  screenEl.style.display='flex';
  screenEl.classList.remove('hidden');
  document.getElementById('hud').classList.add('hidden');
+ envEl.classList.add('hidden');
 }
 
 function showTitle(){
