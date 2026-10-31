@@ -225,8 +225,10 @@ function drawShip(){
   ctx.fillStyle='#7fa8ff';ctx.fillRect(-7,-8,14,7);
   ctx.strokeStyle='#9fb4d8';ctx.lineWidth=3;
   ctx.beginPath();ctx.moveTo(-9,11);ctx.lineTo(-15,19);ctx.moveTo(9,11);ctx.lineTo(15,19);ctx.stroke();
-  if(s.rcsL&&s.fuel>0){ctx.fillStyle='rgba(120,220,255,.85)';ctx.fillRect(-18,-2,-8-Math.random()*6,3);}
-  if(s.rcsR&&s.fuel>0){ctx.fillStyle='rgba(120,220,255,.85)';ctx.fillRect(18,-2,8+Math.random()*6,3);}
+  // A moves ship left: right-side RCS fires.
+  if(s.rcsL&&s.fuel>0){ctx.fillStyle='rgba(120,220,255,.85)';ctx.fillRect(18,-2,8+Math.random()*6,3);}
+  // D moves ship right: left-side RCS fires.
+  if(s.rcsR&&s.fuel>0){ctx.fillStyle='rgba(120,220,255,.85)';ctx.fillRect(-18,-2,-8-Math.random()*6,3);}
   ctx.restore();
 }
 
