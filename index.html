@@ -27,7 +27,7 @@
   .small{font-size:12px;color:#9fb4d8}
   .good{color:#7ee787}.warn{color:#ffd166}.bad{color:#ff7b72}
   kbd{background:#16233d;border:1px solid #31456f;border-radius:4px;padding:1px 5px}
-  .hidden{display:none}
+  .hidden{display:none !important}
   .credits{color:#ffd166;font-weight:bold}
 </style>
 </head>
@@ -95,6 +95,7 @@ addEventListener('keydown',e=>{
 addEventListener('keyup',e=>keys[e.code]=false);
 
 let ship,terrain,stars,state='title',t=0,missionTime=0,lastT=performance.now(),result=null,selectedMission=MISSIONS[0],windPhase=0;
+const screenEl=document.getElementById('screen');
 
 function makeTerrain(m){
  const pts=[]; let x=-200;
@@ -121,7 +122,8 @@ function startMission(m){
  ship={x:120,y:120,vx:m.startVx,vy:0,angle:0,angVel:0,fuel:fuelMax*m.startFuel,fuelMax,hull:maxHull(),hullMax:maxHull(),crew:100,happiness:100,thrusting:false,rcsL:false,rcsR:false,gVert:0,gLat:0,prevVx:0,prevVy:0,peakG:0};
  missionTime=0;result=null;windPhase=0;
  state='play';
- document.getElementById('screen').classList.add('hidden');
+ screenEl.style.display='none';
+ screenEl.classList.add('hidden');
  document.getElementById('hud').classList.remove('hidden');
 }
 
@@ -259,23 +261,24 @@ function drawShip(){
  ctx.restore();
 }
 
-function screen(html){
- const el=document.getElementById('screenCard');el.innerHTML=html;
- document.getElementById('screen').classList.remove('hidden');
+function showScreen(html){
+ document.getElementById('screenCard').innerHTML=html;
+ screenEl.style.display='flex';
+ screenEl.classList.remove('hidden');
  document.getElementById('hud').classList.add('hidden');
 }
 
 function showTitle(){
  state='title';
  const completed=save.completed.length;
- screen(`
+ showScreen(`
   <h1>ORBITAL EXCURSIONS</h1>
   <p>You are Captain of a near-future tourism shuttle.</p>
   <p>Credits: <span class="credits">${save.credits}</span> &nbsp;|&nbsp; Missions completed: ${completed}/${MISSIONS.length}</p>
   <div class="row" style="margin-top:18px">
-   <button onclick="showMissions()">FLY</button>
-   <button onclick="showHangar()">HANGAR</button>
-   <button onclick="resetSave()" class="small">Reset progress</button>
+   <button type="button" onclick="showMissions()">FLY</button>
+   <button type="button" onclick="showHangar()">HANGAR</button>
+   <button type="button" onclick="resetSave()" class="small">Reset progress</button>
   </div>
   <h2>Flight controls</h2>
   <p><kbd>W</kbd>/<kbd>&uarr;</kbd> main engine &nbsp; <kbd>A</kbd>/<kbd>D</kbd> RCS &nbsp; <kbd>Q</kbd>/<kbd>E</kbd> rotate</p>
@@ -292,10 +295,10 @@ function showMissions(){
    <h3>${m.name} ${done?'<span class="good">— COMPLETED</span>':''}</h3>
    <p>${m.description}</p>
    <p class="small">Gravity ${m.gravity.toFixed(1)} m/s² &nbsp;|&nbsp; Pad ${m.padWidth}px &nbsp;|&nbsp; Wind ${m.wind} &nbsp;|&nbsp; Fare ${m.fare} cr</p>
-   <button ${unlocked?'':"disabled"} onclick="startMissionById('${m.id}')">${unlocked?'LAUNCH':'LOCKED'}</button>
+   <button type="button" ${unlocked?'':"disabled"} onclick="startMissionById('${m.id}')">${unlocked?'LAUNCH':'LOCKED'}</button>
   </div>`;
  }).join('');
- screen(`<h1>MISSION SELECT</h1><p>Credits: <span class="credits">${save.credits}</span></p>${cards}<div class="row"><button onclick="showTitle()">BACK</button></div>`);
+ showScreen(`<h1>MISSION SELECT</h1><p>Credits: <span class="credits">${save.credits}</span></p>${cards}<div class="row"><button type="button" onclick="showTitle()">BACK</button></div>`);
 }
 
 function showHangar(){
@@ -308,10 +311,10 @@ function showHangar(){
    <h3>${u.name} — Level ${level}/3</h3>
    <p>${u.desc}</p>
    <p class="small">Current: ${u.effect(level)}${level<3?` &nbsp;→&nbsp; Next: ${u.effect(level+1)}`:''}</p>
-   <button ${cost===null?'disabled':affordable?'':'disabled'} onclick="buyUpgrade('${id}')">${cost===null?'MAXED':`UPGRADE — ${cost} cr`}</button>
+   <button type="button" ${cost===null?'disabled':affordable?'':'disabled'} onclick="buyUpgrade('${id}')">${cost===null?'MAXED':`UPGRADE — ${cost} cr`}</button>
   </div>`;
  }).join('');
- screen(`<h1>HANGAR</h1><p>Credits: <span class="credits">${save.credits}</span></p>${cards}<div class="row"><button onclick="showTitle()">BACK</button></div>`);
+ showScreen(`<h1>HANGAR</h1><p>Credits: <span class="credits">${save.credits}</span></p>${cards}<div class="row"><button type="button" onclick="showTitle()">BACK</button></div>`);
 }
 
 function startMissionById(id){startMission(MISSIONS.find(m=>m.id===id));}
@@ -329,14 +332,14 @@ function resetSave(){
 function showResult(success){
  const m=selectedMission;
  if(success){
-  screen(`<h1>MISSION COMPLETE</h1><p>${m.name} delivered safely.</p>
+  showScreen(`<h1>MISSION COMPLETE</h1><p>${m.name} delivered safely.</p>
    <p>Mission time: ${missionTime.toFixed(1)} s</p>
    <p>Hull: ${Math.round(ship.hull)}% &nbsp; Health: ${Math.round(ship.crew)}% &nbsp; Happiness: ${Math.round(ship.happiness)}%</p>
    <p>Mission fare: ${m.fare} cr<br>Fuel bonus: ${result.fuelBonus} cr<br>Happiness bonus: ${result.happinessBonus} cr<br>Speed bonus: ${result.speedBonus} cr</p>
    <p><b>Total earned: ${result.money} credits</b></p><p>Peak G: ${ship.peakG.toFixed(1)} G</p>
-   <div class="row"><button onclick="showMissions()">MISSIONS</button><button onclick="showHangar()">HANGAR</button><button onclick="startMissionById('${m.id}')">FLY AGAIN</button></div>`);
+   <div class="row"><button type="button" onclick="showMissions()">MISSIONS</button><button type="button" onclick="showHangar()">HANGAR</button><button type="button" onclick="startMissionById('${m.id}')">FLY AGAIN</button></div>`);
  }else{
-  screen(`<h1>MISSION FAILED</h1><p>${ship.hull<=0?'The shuttle was destroyed.':ship.crew<=0?'Passengers did not survive the flight.':'You missed the landing zone.'}</p><p>No payment was issued.</p><div class="row"><button onclick="startMissionById('${m.id}')">RETRY</button><button onclick="showMissions()">MISSIONS</button><button onclick="showHangar()">HANGAR</button></div>`);
+  showScreen(`<h1>MISSION FAILED</h1><p>${ship.hull<=0?'The shuttle was destroyed.':ship.crew<=0?'Passengers did not survive the flight.':'You missed the landing zone.'}</p><p>No payment was issued.</p><div class="row"><button type="button" onclick="startMissionById('${m.id}')">RETRY</button><button type="button" onclick="showMissions()">MISSIONS</button><button type="button" onclick="showHangar()">HANGAR</button></div>`);
  }
 }
 
