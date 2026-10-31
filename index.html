@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>Orbital Excursions — Prototype</title>
+<title>Orbital Excursions</title>
 <style>
   html,body{margin:0;height:100%;background:#05070f;color:#dfe7ff;font-family:ui-monospace,monospace;overflow:hidden}
   #wrap{position:relative;width:100vw;height:100vh}
@@ -13,23 +13,34 @@
   .fill{height:100%;border-radius:4px}
   #fuelFill{background:#59c2ff} #hullFill{background:#7ee787} #crewFill{background:#ffd166} #happyFill{background:#c792ea}
   #gvFill{background:#ff7b72} #glFill{background:#ffa657}
-  #msg{position:absolute;left:50%;top:16%;transform:translateX(-50%);text-align:center;background:rgba(8,14,28,.86);border:1px solid #2b3d66;border-radius:10px;padding:18px 22px;max-width:640px}
-  #msg h1{margin:0 0 8px;font-size:22px;color:#8ab4ff}
-  #msg p{margin:6px 0;font-size:14px}
+  #screen{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(4,7,15,.88);backdrop-filter:blur(3px)}
+  .card{width:min(760px,92vw);max-height:88vh;overflow:auto;background:rgba(8,14,28,.94);border:1px solid #2b3d66;border-radius:12px;padding:24px}
+  h1{margin:0;color:#8ab4ff;font-size:30px;letter-spacing:2px}
+  h2{margin:18px 0 8px;color:#9ecbff;font-size:17px}
+  p{margin:6px 0;font-size:14px}
+  .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+  button{font:inherit;color:#dfe7ff;background:#16233d;border:1px solid #31456f;border-radius:7px;padding:9px 14px;cursor:pointer}
+  button:hover:not(:disabled){background:#20345a;border-color:#7fa8ff}
+  button:disabled{opacity:.45;cursor:not-allowed}
+  .mission,.upgrade{border:1px solid #2b3d66;border-radius:9px;padding:12px;margin:9px 0;background:rgba(15,25,45,.6)}
+  .mission h3,.upgrade h3{margin:0 0 5px;color:#cfe3ff;font-size:15px}
+  .small{font-size:12px;color:#9fb4d8}
+  .good{color:#7ee787}.warn{color:#ffd166}.bad{color:#ff7b72}
   kbd{background:#16233d;border:1px solid #31456f;border-radius:4px;padding:1px 5px}
-  .hidden{display:none}
+  .hidden{display:none !important}
+  .credits{color:#ffd166;font-weight:bold}
 </style>
 </head>
 <body>
 <div id="wrap">
 <canvas id="game"></canvas>
-<div id="hud">
+<div id="hud" class="hidden">
   <div class="panel">
     <div>TIME <span id="time">0.0</span> s</div>
     <div>ALTITUDE <span id="alt">0</span> m</div>
     <div>V-SPEED <span id="vs">0.0</span> m/s</div>
     <div>H-SPEED <span id="hs">0.0</span> m/s</div>
-    <div>FUEL</div><div class="bar"><div id="fuelFill" class="fill" style="width:100%"></div></div>
+    <div>FUEL <span id="fuelText"></span></div><div class="bar"><div id="fuelFill" class="fill" style="width:100%"></div></div>
     <div>HULL</div><div class="bar"><div id="hullFill" class="fill" style="width:100%"></div></div>
     <div>PASSENGER HEALTH</div><div class="bar"><div id="crewFill" class="fill" style="width:100%"></div></div>
     <div>PASSENGER HAPPINESS</div><div class="bar"><div id="happyFill" class="fill" style="width:100%"></div></div>
@@ -37,14 +48,7 @@
     <div>LATERAL G <span id="gl">0.0</span></div><div class="bar"><div id="glFill" class="fill" style="width:0%"></div></div>
   </div>
 </div>
-<div id="msg">
-  <h1>ORBITAL EXCURSIONS</h1>
-  <p>You are Captain of a near-future tourism shuttle.</p>
-  <p>Deliver your passengers to the illuminated landing pad.</p>
-  <p><kbd>W</kbd>/<kbd>&uarr;</kbd> main engine &nbsp; <kbd>A</kbd>/<kbd>D</kbd> RCS &nbsp; <kbd>Q</kbd>/<kbd>E</kbd> rotate</p>
-  <p>Land gently, preserve fuel, keep passengers comfortable, and arrive quickly.</p>
-  <p>Press <kbd>Enter</kbd> to begin.</p>
-</div>
+<div id="screen"><div id="screenCard" class="card"></div></div>
 </div>
 <script>
 const cv=document.getElementById('game'),ctx=cv.getContext('2d');
@@ -56,200 +60,300 @@ const G=9.81, SCALE=8;
 const SAFE_VS=2.2, SAFE_HS=1.6, SAFE_G=3.5, HARD_G=6.5;
 const BASE_FARE=500, FUEL_BONUS_MAX=500, HAPPINESS_RATE=5;
 const TARGET_TIME=90, SPEED_BONUS_RATE=10, SPEED_BONUS_MAX=900;
+const SAVE_KEY='orbitalExcursionsSave_v1';
+
+const MISSIONS=[
+ {id:'lunar',name:'Lunar Shuttle Run',fare:500,gravity:9.81,padWidth:150,roughness:1,wind:0,startVx:18,startFuel:1,description:'A calm training run to the illuminated lunar pad.',unlockAt:0},
+ {id:'mars',name:'Mars Express',fare:900,gravity:5.5,padWidth:120,roughness:1.25,wind:0,startVx:26,startFuel:.9,description:'Low gravity, but a faster approach and a tighter landing zone.',unlockAt:1},
+ {id:'titan',name:'Titan Charter',fare:1400,gravity:2.8,padWidth:105,roughness:1.5,wind:7,startVx:30,startFuel:.85,description:'Thick atmosphere, crosswinds, and a narrow pad.',unlockAt:2},
+ {id:'io',name:'Io Emergency',fare:2200,gravity:12.5,padWidth:95,roughness:1.8,wind:11,startVx:34,startFuel:.8,description:'High gravity, radiation gusts, and almost no margin for error.',unlockAt:3}
+];
+
+const UPGRADES={
+ engine:{name:'Main Engine',levels:[0,400,900,1600],effect:l=>`Thrust ${26+3*l}`,desc:'Improves climb and braking authority.'},
+ fuel:{name:'Fuel Capacity',levels:[0,350,800,1500],effect:l=>`${100+20*l} units`,desc:'Carry more propellant for long approaches.'},
+ hull:{name:'Hull Plating',levels:[0,450,1000,1800],effect:l=>`${100+15*l} hull, ${Math.round(8*l)}% impact resistance`,desc:'Absorbs more landing and collision damage.'},
+ rcs:{name:'RCS Thrusters',levels:[0,300,700,1300],effect:l=>`Lateral thrust ${6+1.5*l}`,desc:'Improves sideways correction without rotating.'}
+};
+
+let save=loadSave();
+function loadSave(){
+ try{
+  const raw=localStorage.getItem(SAVE_KEY);
+  if(raw){const s=JSON.parse(raw);return {credits:s.credits||0,upgrades:Object.assign({engine:0,fuel:0,hull:0,rcs:0},s.upgrades||{}),completed:s.completed||[]};}
+ }catch(e){}
+ return {credits:0,upgrades:{engine:0,fuel:0,hull:0,rcs:0},completed:[]};
+}
+function persist(){localStorage.setItem(SAVE_KEY,JSON.stringify(save));}
 
 const keys={};
 addEventListener('keydown',e=>{
-  keys[e.code]=true;
-  if(e.code==='Enter') startOrRestart();
-  if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space'].includes(e.code))e.preventDefault();
+ keys[e.code]=true;
+ if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space'].includes(e.code))e.preventDefault();
+ if(e.code==='Escape'&&(state==='missions'||state==='hangar'))showTitle();
 });
 addEventListener('keyup',e=>keys[e.code]=false);
 
-let ship, terrain, stars, state='menu', t=0, missionTime=0, lastT=performance.now(), result=null;
+let ship,terrain,stars,state='title',t=0,missionTime=0,lastT=performance.now(),result=null,selectedMission=MISSIONS[0],windPhase=0;
+const screenEl=document.getElementById('screen');
 
-function makeTerrain(){
-  const pts=[]; let x=-200;
-  while(x<W+400){pts.push({x,y:H-70-Math.sin(x*0.004)*28-Math.sin(x*0.011)*14-Math.random()*7});x+=24;}
-  const px=W*0.72, pw=130, py=H-105;
-  for(const p of pts){ if(p.x>px-6&&p.x<px+pw+6)p.y=py; }
-  return {pts,pad:{x:px,w:pw,y:py}};
+function makeTerrain(m){
+ const pts=[]; let x=-200;
+ while(x<W+400){
+  pts.push({x,y:H-70-Math.sin(x*.004)*28*m.roughness-Math.sin(x*.011)*14*m.roughness-Math.random()*7*m.roughness});
+  x+=24;
+ }
+ const px=W*.72,pw=m.padWidth,py=H-105;
+ for(const p of pts){if(p.x>px-6&&p.x<px+pw+6)p.y=py;}
+ return {pts,pad:{x:px,w:pw,y:py}};
 }
 
-function reset(){
-  terrain=makeTerrain();
-  stars=Array.from({length:170},()=>({x:Math.random()*W,y:Math.random()*H*0.72,r:Math.random()*1.5+.3,a:Math.random()*.7+.2}));
-  ship={x:120,y:120,vx:18,vy:0,angle:0,angVel:0,fuel:100,hull:100,crew:100,happiness:100,thrusting:false,rcsL:false,rcsR:false,gVert:0,gLat:0,prevVx:0,prevVy:0,peakG:0};
-  missionTime=0; result=null;
-}
+function maxFuel(){return 100+20*save.upgrades.fuel;}
+function maxHull(){return 100+15*save.upgrades.hull;}
+function enginePower(){return 26+3*save.upgrades.engine;}
+function rcsPower(){return 6+1.5*save.upgrades.rcs;}
+function hullResistance(){return 1-.08*save.upgrades.hull;}
 
-function startOrRestart(){
-  if(state!=='play'){reset();state='play';document.getElementById('msg').classList.add('hidden');}
+function startMission(m){
+ selectedMission=m;
+ terrain=makeTerrain(m);
+ stars=Array.from({length:170},()=>({x:Math.random()*W,y:Math.random()*H*.72,r:Math.random()*1.5+.3,a:Math.random()*.7+.2}));
+ const fuelMax=maxFuel();
+ ship={x:120,y:120,vx:m.startVx,vy:0,angle:0,angVel:0,fuel:fuelMax*m.startFuel,fuelMax,hull:maxHull(),hullMax:maxHull(),crew:100,happiness:100,thrusting:false,rcsL:false,rcsR:false,gVert:0,gLat:0,prevVx:0,prevVy:0,peakG:0};
+ missionTime=0;result=null;windPhase=0;
+ state='play';
+ screenEl.style.display='none';
+ screenEl.classList.add('hidden');
+ document.getElementById('hud').classList.remove('hidden');
 }
 
 function terrainYAt(x){
-  const p=terrain.pts;
-  for(let i=0;i<p.length-1;i++){
-    if(x>=p[i].x&&x<=p[i+1].x){
-      const f=(x-p[i].x)/(p[i+1].x-p[i].x);
-      return p[i].y+(p[i+1].y-p[i].y)*f;
-    }
-  }
-  return H;
+ const p=terrain.pts;
+ for(let i=0;i<p.length-1;i++){
+  if(x>=p[i].x&&x<=p[i+1].x){const f=(x-p[i].x)/(p[i+1].x-p[i].x);return p[i].y+(p[i+1].y-p[i].y)*f;}
+ }
+ return H;
 }
 
 function update(dt){
-  t+=dt; missionTime+=dt;
-  const s=ship;
-  s.prevVx=s.vx; s.prevVy=s.vy;
+ t+=dt;missionTime+=dt;windPhase+=dt;
+ const s=ship,m=selectedMission;
+ s.prevVx=s.vx;s.prevVy=s.vy;
 
-  if(keys.KeyQ)s.angVel-=2.4*dt;
-  if(keys.KeyE)s.angVel+=2.4*dt;
-  s.angVel*=0.94;
-  s.angle+=s.angVel*dt;
+ if(keys.KeyQ)s.angVel-=2.4*dt;
+ if(keys.KeyE)s.angVel+=2.4*dt;
+ s.angVel*=.94;s.angle+=s.angVel*dt;
 
-  s.thrusting=(keys.KeyW||keys.ArrowUp)&&s.fuel>0;
-  s.rcsL=(keys.KeyA||keys.ArrowLeft)&&s.fuel>0;
-  s.rcsR=(keys.KeyD||keys.ArrowRight)&&s.fuel>0;
+ s.thrusting=(keys.KeyW||keys.ArrowUp)&&s.fuel>0;
+ s.rcsL=(keys.KeyA||keys.ArrowLeft)&&s.fuel>0;
+ s.rcsR=(keys.KeyD||keys.ArrowRight)&&s.fuel>0;
 
-  let ax=0, ay=G;
-  if(s.thrusting){
-    const power=26*(0.55+0.45*s.hull/100);
-    ax+=Math.sin(s.angle)*power;
-    ay-=Math.cos(s.angle)*power;
-    s.fuel=Math.max(0,s.fuel-7.5*dt);
+ let ax=0,ay=m.gravity;
+ if(m.wind){ax+=Math.sin(windPhase*.7)*m.wind*.08;}
+ if(s.thrusting){
+  const power=enginePower()*(.55+.45*s.hull/s.hullMax);
+  ax+=Math.sin(s.angle)*power;
+  ay-=Math.cos(s.angle)*power;
+  s.fuel=Math.max(0,s.fuel-7.5*dt);
+ }
+ if(s.rcsL){ax-=rcsPower();s.fuel=Math.max(0,s.fuel-1.8*dt);}
+ if(s.rcsR){ax+=rcsPower();s.fuel=Math.max(0,s.fuel-1.8*dt);}
+
+ s.vx+=ax*dt;s.vy+=ay*dt;
+ s.x+=s.vx*SCALE*dt;s.y+=s.vy*SCALE*dt;
+
+ const dvx=(s.vx-s.prevVx)/dt,dvy=(s.vy-s.prevVy)/dt;
+ s.gLat=Math.abs(dvx)/G;s.gVert=Math.abs(dvy)/G;
+ const totalG=Math.hypot(dvx,dvy)/G;
+ s.peakG=Math.max(s.peakG,totalG);
+
+ if(totalG>SAFE_G){
+  const excess=totalG-SAFE_G,stress=excess*(totalG>HARD_G?9:3.2)*dt;
+  s.crew=Math.max(0,s.crew-stress);
+  s.happiness=Math.max(0,s.happiness-stress*1.25);
+ }else if(totalG<1.5){
+  s.crew=Math.min(100,s.crew+.7*dt);
+  s.happiness=Math.min(100,s.happiness+1.1*dt);
+ }
+
+ if(s.x<20){s.x=20;s.vx=Math.abs(s.vx)*.4;s.hull=Math.max(0,s.hull-2*hullResistance());s.happiness=Math.max(0,s.happiness-3);}
+ if(s.x>W-20){s.x=W-20;s.vx=-Math.abs(s.vx)*.4;s.hull=Math.max(0,s.hull-2*hullResistance());s.happiness=Math.max(0,s.happiness-3);}
+ if(s.y<20){s.y=20;s.vy=Math.max(s.vy,0);}
+
+ const gy=terrainYAt(s.x);
+ if(s.y+18>=gy){
+  s.y=gy-18;
+  const vs=Math.abs(s.vy),hs=Math.abs(s.vx);
+  const onPad=s.x>terrain.pad.x&&s.x<terrain.pad.x+terrain.pad.w;
+  const impact=(Math.max(0,vs-SAFE_VS)*8+Math.max(0,hs-SAFE_HS)*5)*hullResistance();
+  s.hull=Math.max(0,s.hull-impact);
+  s.crew=Math.max(0,s.crew-impact*.8);
+  s.happiness=Math.max(0,s.happiness-impact*1.5);
+  s.vx*=.15;s.vy=0;s.angVel*=.2;
+
+  if(s.hull<=0||s.crew<=0||(!onPad&&vs>SAFE_VS*2.2)){
+   state='over';result=calculatePayout(false);showResult(false);
+  }else if(onPad&&vs<=SAFE_VS&&hs<=SAFE_HS&&Math.abs(s.angle)<.35){
+   state='won';result=calculatePayout(true);
+   if(!save.completed.includes(m.id)){save.completed.push(m.id);}
+   save.credits+=result.money;persist();showResult(true);
   }
-  if(s.rcsL){ax-=6;s.fuel=Math.max(0,s.fuel-1.8*dt);}
-  if(s.rcsR){ax+=6;s.fuel=Math.max(0,s.fuel-1.8*dt);}
-
-  s.vx+=ax*dt; s.vy+=ay*dt;
-  s.x+=s.vx*SCALE*dt; s.y+=s.vy*SCALE*dt;
-
-  const dvx=(s.vx-s.prevVx)/dt, dvy=(s.vy-s.prevVy)/dt;
-  s.gLat=Math.abs(dvx)/G;
-  s.gVert=Math.abs(dvy)/G;
-  const totalG=Math.hypot(dvx,dvy)/G;
-  s.peakG=Math.max(s.peakG,totalG);
-
-  if(totalG>SAFE_G){
-    const excess=totalG-SAFE_G;
-    const stress=excess*(totalG>HARD_G?9:3.2)*dt;
-    s.crew=Math.max(0,s.crew-stress);
-    s.happiness=Math.max(0,s.happiness-stress*1.25);
-  } else if(totalG<1.5){
-    s.crew=Math.min(100,s.crew+0.7*dt);
-    s.happiness=Math.min(100,s.happiness+1.1*dt);
-  }
-
-  if(s.x<20){s.x=20;s.vx=Math.abs(s.vx)*.4;s.hull=Math.max(0,s.hull-2);s.happiness=Math.max(0,s.happiness-3);}
-  if(s.x>W-20){s.x=W-20;s.vx=-Math.abs(s.vx)*.4;s.hull=Math.max(0,s.hull-2);s.happiness=Math.max(0,s.happiness-3);}
-  if(s.y<20){s.y=20;s.vy=Math.max(s.vy,0);}
-
-  const gy=terrainYAt(s.x);
-  if(s.y+18>=gy){
-    s.y=gy-18;
-    const vs=Math.abs(s.vy), hs=Math.abs(s.vx);
-    const onPad=s.x>terrain.pad.x&&s.x<terrain.pad.x+terrain.pad.w;
-    const impact=Math.max(0,vs-SAFE_VS)*8+Math.max(0,hs-SAFE_HS)*5;
-    s.hull=Math.max(0,s.hull-impact);
-    s.crew=Math.max(0,s.crew-impact*0.8);
-    s.happiness=Math.max(0,s.happiness-impact*1.5);
-    s.vx*=0.15; s.vy=0; s.angVel*=0.2;
-
-    if(s.hull<=0||s.crew<=0||(!onPad&&vs>SAFE_VS*2.2)){
-      state='over'; result=calculatePayout(false); showMessage(false);
-    } else if(onPad&&vs<=SAFE_VS&&hs<=SAFE_HS&&Math.abs(s.angle)<0.35){
-      state='won'; result=calculatePayout(true); showMessage(true);
-    }
-  }
+ }
 }
 
 function calculatePayout(success){
-  const s=ship;
-  const fuelBonus=Math.round((s.fuel/100)*FUEL_BONUS_MAX);
-  const happinessBonus=Math.round(s.happiness*HAPPINESS_RATE);
-  const speedBonus=Math.min(SPEED_BONUS_MAX,Math.max(0,Math.round((TARGET_TIME-missionTime)*SPEED_BONUS_RATE)));
-  const money=success?BASE_FARE+fuelBonus+happinessBonus+speedBonus:0;
-  return {money,fuelBonus,happinessBonus,speedBonus};
+ const s=ship;
+ const fuelBonus=Math.round((s.fuel/s.fuelMax)*FUEL_BONUS_MAX);
+ const happinessBonus=Math.round(s.happiness*HAPPINESS_RATE);
+ const speedBonus=Math.min(SPEED_BONUS_MAX,Math.max(0,Math.round((TARGET_TIME-missionTime)*SPEED_BONUS_RATE)));
+ const money=success?selectedMission.fare+fuelBonus+happinessBonus+speedBonus:0;
+ return {money,fuelBonus,happinessBonus,speedBonus};
 }
 
 function draw(){
-  ctx.clearRect(0,0,W,H);
-  const sky=ctx.createLinearGradient(0,0,0,H);
-  sky.addColorStop(0,'#040718');sky.addColorStop(.65,'#0b1630');sky.addColorStop(1,'#16233d');
-  ctx.fillStyle=sky;ctx.fillRect(0,0,W,H);
-
-  for(const st of stars){ctx.globalAlpha=st.a;ctx.fillStyle='#cfe3ff';ctx.beginPath();ctx.arc(st.x,st.y,st.r,0,7);ctx.fill();}
-  ctx.globalAlpha=1;
-
-  ctx.beginPath();ctx.moveTo(-100,H+10);
-  for(const p of terrain.pts)ctx.lineTo(p.x,p.y);
-  ctx.lineTo(W+100,H+10);ctx.closePath();
-  ctx.fillStyle='#101a2e';ctx.fill();
-  ctx.strokeStyle='#3b5480';ctx.lineWidth=2;ctx.stroke();
-
-  const p=terrain.pad;
-  ctx.fillStyle='#1d2c4a';ctx.fillRect(p.x,p.y,p.w,8);
-  ctx.strokeStyle='#7fd1ff';ctx.lineWidth=2;ctx.strokeRect(p.x,p.y,p.w,8);
-  for(let i=0;i<5;i++){
-    const blink=(Math.sin(t*4+i)*.5+.5);
-    ctx.fillStyle=`rgba(120,220,255,${.25+blink*.65})`;
-    ctx.fillRect(p.x+8+i*((p.w-16)/4)-2,p.y-4,5,5);
-  }
-
-  drawShip();
-
-  document.getElementById('time').textContent=missionTime.toFixed(1);
-  document.getElementById('alt').textContent=Math.max(0,Math.round((terrainYAt(ship.x)-ship.y-18)/SCALE));
-  document.getElementById('vs').textContent=ship.vy.toFixed(1);
-  document.getElementById('hs').textContent=ship.vx.toFixed(1);
-  document.getElementById('gv').textContent=ship.gVert.toFixed(1);
-  document.getElementById('gl').textContent=ship.gLat.toFixed(1);
-  document.getElementById('fuelFill').style.width=ship.fuel+'%';
-  document.getElementById('hullFill').style.width=ship.hull+'%';
-  document.getElementById('crewFill').style.width=ship.crew+'%';
-  document.getElementById('happyFill').style.width=ship.happiness+'%';
-  document.getElementById('gvFill').style.width=Math.min(100,ship.gVert/10*100)+'%';
-  document.getElementById('glFill').style.width=Math.min(100,ship.gLat/10*100)+'%';
+ ctx.clearRect(0,0,W,H);
+ const sky=ctx.createLinearGradient(0,0,0,H);
+ sky.addColorStop(0,'#040718');sky.addColorStop(.65,'#0b1630');sky.addColorStop(1,'#16233d');
+ ctx.fillStyle=sky;ctx.fillRect(0,0,W,H);
+ for(const st of stars){ctx.globalAlpha=st.a;ctx.fillStyle='#cfe3ff';ctx.beginPath();ctx.arc(st.x,st.y,st.r,0,7);ctx.fill();}
+ ctx.globalAlpha=1;
+ ctx.beginPath();ctx.moveTo(-100,H+10);
+ for(const p of terrain.pts)ctx.lineTo(p.x,p.y);
+ ctx.lineTo(W+100,H+10);ctx.closePath();
+ ctx.fillStyle='#101a2e';ctx.fill();ctx.strokeStyle='#3b5480';ctx.lineWidth=2;ctx.stroke();
+ const p=terrain.pad;
+ ctx.fillStyle='#1d2c4a';ctx.fillRect(p.x,p.y,p.w,8);
+ ctx.strokeStyle='#7fd1ff';ctx.lineWidth=2;ctx.strokeRect(p.x,p.y,p.w,8);
+ for(let i=0;i<5;i++){
+  const blink=Math.sin(t*4+i)*.5+.5;
+  ctx.fillStyle=`rgba(120,220,255,${.25+blink*.65})`;
+  ctx.fillRect(p.x+8+i*((p.w-16)/4)-2,p.y-4,5,5);
+ }
+ drawShip();
+ document.getElementById('time').textContent=missionTime.toFixed(1);
+ document.getElementById('alt').textContent=Math.max(0,Math.round((terrainYAt(ship.x)-ship.y-18)/SCALE));
+ document.getElementById('vs').textContent=ship.vy.toFixed(1);
+ document.getElementById('hs').textContent=ship.vx.toFixed(1);
+ document.getElementById('gv').textContent=ship.gVert.toFixed(1);
+ document.getElementById('gl').textContent=ship.gLat.toFixed(1);
+ document.getElementById('fuelText').textContent=`${Math.round(ship.fuel)} / ${ship.fuelMax}`;
+ document.getElementById('fuelFill').style.width=(ship.fuel/ship.fuelMax*100)+'%';
+ document.getElementById('hullFill').style.width=(ship.hull/ship.hullMax*100)+'%';
+ document.getElementById('crewFill').style.width=ship.crew+'%';
+ document.getElementById('happyFill').style.width=ship.happiness+'%';
+ document.getElementById('gvFill').style.width=Math.min(100,ship.gVert/10*100)+'%';
+ document.getElementById('glFill').style.width=Math.min(100,ship.gLat/10*100)+'%';
 }
 
 function drawShip(){
-  const s=ship;
-  ctx.save();ctx.translate(s.x,s.y);ctx.rotate(s.angle);
-  if(s.thrusting&&s.fuel>0){
-    const f=18+Math.random()*14;
-    ctx.fillStyle='rgba(255,170,70,.9)';
-    ctx.beginPath();ctx.moveTo(-6,16);ctx.lineTo(6,16);ctx.lineTo(0,16+f);ctx.closePath();ctx.fill();
-    ctx.fillStyle='rgba(255,240,180,.9)';
-    ctx.beginPath();ctx.moveTo(-3,16);ctx.lineTo(3,16);ctx.lineTo(0,16+f*.55);ctx.closePath();ctx.fill();
-  }
-  ctx.fillStyle='#dfe7ff';
-  ctx.beginPath();
-  ctx.moveTo(0,-20);ctx.quadraticCurveTo(16,-4,14,12);ctx.lineTo(-14,12);ctx.quadraticCurveTo(-16,-4,0,-20);
-  ctx.fill();
-  ctx.fillStyle='#7fa8ff';ctx.fillRect(-7,-8,14,7);
-  ctx.strokeStyle='#9fb4d8';ctx.lineWidth=3;
-  ctx.beginPath();ctx.moveTo(-9,11);ctx.lineTo(-15,19);ctx.moveTo(9,11);ctx.lineTo(15,19);ctx.stroke();
-  if(s.rcsL&&s.fuel>0){ctx.fillStyle='rgba(120,220,255,.85)';ctx.fillRect(18,-2,8+Math.random()*6,3);}
-  if(s.rcsR&&s.fuel>0){ctx.fillStyle='rgba(120,220,255,.85)';ctx.fillRect(-18,-2,-8-Math.random()*6,3);}
-  ctx.restore();
+ const s=ship;
+ ctx.save();ctx.translate(s.x,s.y);ctx.rotate(s.angle);
+ if(s.thrusting&&s.fuel>0){
+  const f=18+Math.random()*14;
+  ctx.fillStyle='rgba(255,170,70,.9)';ctx.beginPath();ctx.moveTo(-6,16);ctx.lineTo(6,16);ctx.lineTo(0,16+f);ctx.closePath();ctx.fill();
+  ctx.fillStyle='rgba(255,240,180,.9)';ctx.beginPath();ctx.moveTo(-3,16);ctx.lineTo(3,16);ctx.lineTo(0,16+f*.55);ctx.closePath();ctx.fill();
+ }
+ ctx.fillStyle='#dfe7ff';ctx.beginPath();ctx.moveTo(0,-20);ctx.quadraticCurveTo(16,-4,14,12);ctx.lineTo(-14,12);ctx.quadraticCurveTo(-16,-4,0,-20);ctx.fill();
+ ctx.fillStyle='#7fa8ff';ctx.fillRect(-7,-8,14,7);
+ ctx.strokeStyle='#9fb4d8';ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(-9,11);ctx.lineTo(-15,19);ctx.moveTo(9,11);ctx.lineTo(15,19);ctx.stroke();
+ if(s.rcsL&&s.fuel>0){ctx.fillStyle='rgba(120,220,255,.85)';ctx.fillRect(18,-2,8+Math.random()*6,3);}
+ if(s.rcsR&&s.fuel>0){ctx.fillStyle='rgba(120,220,255,.85)';ctx.fillRect(-18,-2,-8-Math.random()*6,3);}
+ ctx.restore();
 }
 
-function showMessage(success){
-  const m=document.getElementById('msg');m.classList.remove('hidden');
-  if(success){
-    m.innerHTML=`<h1>MISSION COMPLETE</h1><p>Passengers delivered safely.</p><p>Mission time: ${missionTime.toFixed(1)} s</p><p>Hull: ${Math.round(ship.hull)}% &nbsp; Health: ${Math.round(ship.crew)}% &nbsp; Happiness: ${Math.round(ship.happiness)}%</p><p>Base fare: ${BASE_FARE} cr<br>Fuel bonus: ${result.fuelBonus} cr<br>Happiness bonus: ${result.happinessBonus} cr<br>Speed bonus: ${result.speedBonus} cr</p><p><b>Total earned: ${result.money} credits</b></p><p>Peak G: ${ship.peakG.toFixed(1)} G</p><p>Press <kbd>Enter</kbd> to fly again.</p>`;
-  }else{
-    m.innerHTML=`<h1>MISSION FAILED</h1><p>${ship.hull<=0?'The shuttle was destroyed.':ship.crew<=0?'Passengers did not survive the flight.':'You missed the landing zone.'}</p><p>No payment was issued.</p><p>Press <kbd>Enter</kbd> to retry.</p>`;
-  }
+function showScreen(html){
+ document.getElementById('screenCard').innerHTML=html;
+ screenEl.style.display='flex';
+ screenEl.classList.remove('hidden');
+ document.getElementById('hud').classList.add('hidden');
+}
+
+function showTitle(){
+ state='title';
+ const completed=save.completed.length;
+ showScreen(`
+  <h1>ORBITAL EXCURSIONS</h1>
+  <p>You are Captain of a near-future tourism shuttle.</p>
+  <p>Credits: <span class="credits">${save.credits}</span> &nbsp;|&nbsp; Missions completed: ${completed}/${MISSIONS.length}</p>
+  <div class="row" style="margin-top:18px">
+   <button type="button" onclick="showMissions()">FLY</button>
+   <button type="button" onclick="showHangar()">HANGAR</button>
+   <button type="button" onclick="resetSave()" class="small">Reset progress</button>
+  </div>
+  <h2>Flight controls</h2>
+  <p><kbd>W</kbd>/<kbd>&uarr;</kbd> main engine &nbsp; <kbd>A</kbd>/<kbd>D</kbd> RCS &nbsp; <kbd>Q</kbd>/<kbd>E</kbd> rotate</p>
+  <p>Land gently on the pad, preserve fuel, protect passengers, and arrive quickly.</p>
+ `);
+}
+
+function showMissions(){
+ state='missions';
+ const cards=MISSIONS.map((m,i)=>{
+  const unlocked=i===0||save.completed.includes(MISSIONS[i-1].id);
+  const done=save.completed.includes(m.id);
+  return `<div class="mission">
+   <h3>${m.name} ${done?'<span class="good">— COMPLETED</span>':''}</h3>
+   <p>${m.description}</p>
+   <p class="small">Gravity ${m.gravity.toFixed(1)} m/s² &nbsp;|&nbsp; Pad ${m.padWidth}px &nbsp;|&nbsp; Wind ${m.wind} &nbsp;|&nbsp; Fare ${m.fare} cr</p>
+   <button type="button" ${unlocked?'':"disabled"} onclick="startMissionById('${m.id}')">${unlocked?'LAUNCH':'LOCKED'}</button>
+  </div>`;
+ }).join('');
+ showScreen(`<h1>MISSION SELECT</h1><p>Credits: <span class="credits">${save.credits}</span></p>${cards}<div class="row"><button type="button" onclick="showTitle()">BACK</button></div>`);
+}
+
+function showHangar(){
+ state='hangar';
+ const cards=Object.entries(UPGRADES).map(([id,u])=>{
+  const level=save.upgrades[id];
+  const cost=level<3?u.levels[level+1]:null;
+  const affordable=cost!==null&&save.credits>=cost;
+  return `<div class="upgrade">
+   <h3>${u.name} — Level ${level}/3</h3>
+   <p>${u.desc}</p>
+   <p class="small">Current: ${u.effect(level)}${level<3?` &nbsp;→&nbsp; Next: ${u.effect(level+1)}`:''}</p>
+   <button type="button" ${cost===null?'disabled':affordable?'':'disabled'} onclick="buyUpgrade('${id}')">${cost===null?'MAXED':`UPGRADE — ${cost} cr`}</button>
+  </div>`;
+ }).join('');
+ showScreen(`<h1>HANGAR</h1><p>Credits: <span class="credits">${save.credits}</span></p>${cards}<div class="row"><button type="button" onclick="showTitle()">BACK</button></div>`);
+}
+
+function startMissionById(id){startMission(MISSIONS.find(m=>m.id===id));}
+function buyUpgrade(id){
+ const u=UPGRADES[id],level=save.upgrades[id];
+ if(level>=3)return;
+ const cost=u.levels[level+1];
+ if(save.credits<cost)return;
+ save.credits-=cost;save.upgrades[id]++;persist();showHangar();
+}
+function resetSave(){
+ save={credits:0,upgrades:{engine:0,fuel:0,hull:0,rcs:0},completed:[]};persist();showTitle();
+}
+
+function showResult(success){
+ const m=selectedMission;
+ if(success){
+  showScreen(`<h1>MISSION COMPLETE</h1><p>${m.name} delivered safely.</p>
+   <p>Mission time: ${missionTime.toFixed(1)} s</p>
+   <p>Hull: ${Math.round(ship.hull)}% &nbsp; Health: ${Math.round(ship.crew)}% &nbsp; Happiness: ${Math.round(ship.happiness)}%</p>
+   <p>Mission fare: ${m.fare} cr<br>Fuel bonus: ${result.fuelBonus} cr<br>Happiness bonus: ${result.happinessBonus} cr<br>Speed bonus: ${result.speedBonus} cr</p>
+   <p><b>Total earned: ${result.money} credits</b></p><p>Peak G: ${ship.peakG.toFixed(1)} G</p>
+   <div class="row"><button type="button" onclick="showMissions()">MISSIONS</button><button type="button" onclick="showHangar()">HANGAR</button><button type="button" onclick="startMissionById('${m.id}')">FLY AGAIN</button></div>`);
+ }else{
+  showScreen(`<h1>MISSION FAILED</h1><p>${ship.hull<=0?'The shuttle was destroyed.':ship.crew<=0?'Passengers did not survive the flight.':'You missed the landing zone.'}</p><p>No payment was issued.</p><div class="row"><button type="button" onclick="startMissionById('${m.id}')">RETRY</button><button type="button" onclick="showMissions()">MISSIONS</button><button type="button" onclick="showHangar()">HANGAR</button></div>`);
+ }
 }
 
 function loop(now){
-  const dt=Math.min(0.033,(now-lastT)/1000);lastT=now;
-  if(state==='play')update(dt);
-  if(ship)draw();
-  requestAnimationFrame(loop);
+ const dt=Math.min(.033,(now-lastT)/1000);lastT=now;
+ if(state==='play')update(dt);
+ if(ship&&(state==='play'||state==='won'||state==='over'))draw();
+ requestAnimationFrame(loop);
 }
-reset();state='menu';
+
+terrain=makeTerrain(MISSIONS[0]);
+stars=Array.from({length:170},()=>({x:Math.random()*W,y:Math.random()*H*.72,r:Math.random()*1.5+.3,a:Math.random()*.7+.2}));
+ship={x:120,y:120,vx:0,vy:0,angle:0,angVel:0,fuel:100,fuelMax:100,hull:100,hullMax:100,crew:100,happiness:100,thrusting:false,rcsL:false,rcsR:false,gVert:0,gLat:0,prevVx:0,prevVy:0,peakG:0};
+showTitle();
 requestAnimationFrame(loop);
 </script>
 </body>
