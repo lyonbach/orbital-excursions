@@ -55,42 +55,63 @@ const FlightSound=(()=>{
    tone.connect(envelope);envelope.connect(master);voices.add(tone);tone.onended=()=>{voices.delete(tone);tone.disconnect();envelope.disconnect();};tone.start(now);tone.stop(now+duration);
   }
  }
- function gear(strength=1,final=false,deploying=true){
+ function latchClick(time,strength,pitch=1){
+  const source=noise(),filter=audio.createBiquadFilter(),gain=audio.createGain();
+  source.loop=false;filter.type='bandpass';filter.frequency.setValueAtTime(1500*pitch,time);
+  filter.frequency.exponentialRampToValueAtTime(750*pitch,time+.025);filter.Q.value=1.4;
+  gain.gain.setValueAtTime(0,time);gain.gain.linearRampToValueAtTime(.11*strength,time+.002);gain.gain.exponentialRampToValueAtTime(.0001,time+.03);
+  source.connect(filter);filter.connect(gain);gain.connect(master);
+  voices.add(source);source.onended=()=>{voices.delete(source);source.disconnect();filter.disconnect();gain.disconnect();};
+  source.start(time);source.stop(time+.04);
+ }
+ function gearStart(deploying=true){
   if(!audio||failed||!ready||muted||document.hidden||!document.hasFocus()||audio.state!=='running')return;
-  const now=audio.currentTime,s=Math.max(.3,Math.min(1.6,strength));
-  const click=now,scrape=now+.045,knock=final?now+.10:now+.13;
-  tail=Math.max(tail,knock+.13);
-  const clickSource=noise(),clickFilter=audio.createBiquadFilter(),clickGain=audio.createGain();
-  clickSource.loop=false;clickFilter.type='highpass';clickFilter.frequency.value=1250;
-  clickGain.gain.setValueAtTime(0,click);clickGain.gain.linearRampToValueAtTime(.085*s,click+.002);clickGain.gain.exponentialRampToValueAtTime(.0001,click+.016);
-  clickSource.connect(clickFilter);clickFilter.connect(clickGain);clickGain.connect(master);
-  voices.add(clickSource);clickSource.onended=()=>{voices.delete(clickSource);clickSource.disconnect();clickFilter.disconnect();clickGain.disconnect();};
-  clickSource.start(click);clickSource.stop(click+.025);
-  const scrapeSource=noise(),scrapeFilter=audio.createBiquadFilter(),scrapeGain=audio.createGain();
-  scrapeSource.loop=false;scrapeFilter.type='bandpass';scrapeFilter.Q.value=1.25;
-  scrapeFilter.frequency.setValueAtTime(deploying?620:780,scrape);
-  scrapeFilter.frequency.exponentialRampToValueAtTime(deploying?340:460,scrape+.07);
-  scrapeGain.gain.setValueCurveAtTime(new Float32Array([0,.7,1,.55,.9,.4,.65,0]),scrape,.07);
-  scrapeSource.connect(scrapeFilter);scrapeFilter.connect(scrapeGain);scrapeGain.connect(master);
-  voices.add(scrapeSource);scrapeSource.onended=()=>{voices.delete(scrapeSource);scrapeSource.disconnect();scrapeFilter.disconnect();scrapeGain.disconnect();};
-  scrapeSource.start(scrape);scrapeSource.stop(scrape+.09);
-  const knockTone=audio.createOscillator(),knockGain=audio.createGain();
-  knockTone.type='sine';knockTone.frequency.setValueAtTime(deploying?105:125,knock);
-  knockTone.frequency.exponentialRampToValueAtTime(deploying?48:58,knock+.055);
-  knockGain.gain.setValueAtTime(0,knock);knockGain.gain.linearRampToValueAtTime(.27*s,knock+.003);knockGain.gain.exponentialRampToValueAtTime(.0001,knock+.075);
-  knockTone.connect(knockGain);knockGain.connect(master);
-  voices.add(knockTone);knockTone.onended=()=>{voices.delete(knockTone);knockTone.disconnect();knockGain.disconnect();};
-  knockTone.start(knock);knockTone.stop(knock+.1);
-  const bodySource=noise(),bodyFilter=audio.createBiquadFilter(),bodyGain=audio.createGain();
-  bodySource.loop=false;bodyFilter.type='lowpass';bodyFilter.frequency.value=240;
-  bodyGain.gain.setValueAtTime(.11*s,knock);bodyGain.gain.exponentialRampToValueAtTime(.0001,knock+.04);
-  bodySource.connect(bodyFilter);bodyFilter.connect(bodyGain);bodyGain.connect(master);
-  voices.add(bodySource);bodySource.onended=()=>{voices.delete(bodySource);bodySource.disconnect();bodyFilter.disconnect();bodyGain.disconnect();};
-  bodySource.start(knock);bodySource.stop(knock+.055);
-  const followTime=knock+.045,follow=audio.createOscillator(),followGain=audio.createGain();
+  const now=audio.currentTime,duration=1.7;
+  tail=Math.max(tail,now+duration+.1);
+  latchClick(now,deploying?1:.8,deploying?1:1.18);
+  latchClick(now+.07,deploying?.75:.6,deploying?.82:.95);
+  const motor=audio.createOscillator(),motorGain=audio.createGain(),motorFilter=audio.createBiquadFilter();
+  motor.type='sawtooth';motor.frequency.setValueAtTime(deploying?54:71,now+.09);
+  motor.frequency.linearRampToValueAtTime(deploying?49:66,now+duration);
+  motorFilter.type='lowpass';motorFilter.frequency.value=340;motorFilter.Q.value=.8;
+  motorGain.gain.setValueAtTime(0,now+.09);
+  motorGain.gain.linearRampToValueAtTime(deploying?.055:.042,now+.17);
+  motorGain.gain.setValueAtTime(deploying?.055:.042,now+duration-.12);
+  motorGain.gain.linearRampToValueAtTime(0,now+duration);
+  motor.connect(motorFilter);motorFilter.connect(motorGain);motorGain.connect(master);
+  voices.add(motor);motor.onended=()=>{voices.delete(motor);motor.disconnect();motorFilter.disconnect();motorGain.disconnect();};
+  motor.start(now+.09);motor.stop(now+duration+.01);
+  const texture=noise(),textureFilter=audio.createBiquadFilter(),textureGain=audio.createGain();
+  texture.loop=false;textureFilter.type='bandpass';textureFilter.frequency.value=deploying?260:330;textureFilter.Q.value=.9;
+  textureGain.gain.setValueAtTime(0,now+.09);
+  textureGain.gain.linearRampToValueAtTime(deploying?.018:.014,now+.2);
+  textureGain.gain.setValueAtTime(deploying?.018:.014,now+duration-.12);
+  textureGain.gain.linearRampToValueAtTime(0,now+duration);
+  texture.connect(textureFilter);textureFilter.connect(textureGain);textureGain.connect(master);
+  voices.add(texture);texture.onended=()=>{voices.delete(texture);texture.disconnect();textureFilter.disconnect();textureGain.disconnect();};
+  texture.start(now+.09);texture.stop(now+duration+.01);
+ }
+ function gearLock(strength=1,deploying=true){
+  if(!audio||failed||!ready||muted||document.hidden||!document.hasFocus()||audio.state!=='running')return;
+  const now=audio.currentTime,s=Math.max(.4,Math.min(1.6,strength));
+  tail=Math.max(tail,now+.16);
+  const knock=audio.createOscillator(),knockGain=audio.createGain();
+  knock.type='sine';knock.frequency.setValueAtTime(deploying?105:125,now);
+  knock.frequency.exponentialRampToValueAtTime(deploying?48:58,now+.055);
+  knockGain.gain.setValueAtTime(0,now);knockGain.gain.linearRampToValueAtTime(.26*s,now+.003);knockGain.gain.exponentialRampToValueAtTime(.0001,now+.07);
+  knock.connect(knockGain);knockGain.connect(master);
+  voices.add(knock);knock.onended=()=>{voices.delete(knock);knock.disconnect();knockGain.disconnect();};
+  knock.start(now);knock.stop(now+.09);
+  const body=noise(),bodyFilter=audio.createBiquadFilter(),bodyGain=audio.createGain();
+  body.loop=false;bodyFilter.type='lowpass';bodyFilter.frequency.value=240;
+  bodyGain.gain.setValueAtTime(.10*s,now);bodyGain.gain.exponentialRampToValueAtTime(.0001,now+.038);
+  body.connect(bodyFilter);bodyFilter.connect(bodyGain);bodyGain.connect(master);
+  voices.add(body);body.onended=()=>{voices.delete(body);body.disconnect();bodyFilter.disconnect();bodyGain.disconnect();};
+  body.start(now);body.stop(now+.05);
+  const followTime=now+.042,follow=audio.createOscillator(),followGain=audio.createGain();
   follow.type='sine';follow.frequency.setValueAtTime(deploying?72:88,followTime);
-  follow.frequency.exponentialRampToValueAtTime(deploying?40:48,followTime+.04);
-  followGain.gain.setValueAtTime(0,followTime);followGain.gain.linearRampToValueAtTime(.15*s,followTime+.002);followGain.gain.exponentialRampToValueAtTime(.0001,followTime+.05);
+  follow.frequency.exponentialRampToValueAtTime(deploying?40:48,followTime+.038);
+  followGain.gain.setValueAtTime(0,followTime);followGain.gain.linearRampToValueAtTime(.13*s,followTime+.002);followGain.gain.exponentialRampToValueAtTime(.0001,followTime+.048);
   follow.connect(followGain);followGain.connect(master);
   voices.add(follow);follow.onended=()=>{voices.delete(follow);follow.disconnect();followGain.disconnect();};
   follow.start(followTime);follow.stop(followTime+.07);
@@ -110,14 +131,13 @@ const FlightSound=(()=>{
   originalUpdate(dt);
   if(!playing||ship!==current)return;
   const after=current.gear.progress;
-  if(target===1&&before<.999&&after>=.999)gear(1.2,true,true);
-  if(target===0&&before>.001&&after<=.001)gear(.9,true,false);
+  if(target===1&&before<.999&&after>=.999)gearLock(1.2,true);
+  if(target===0&&before>.001&&after<=.001)gearLock(.9,false);
  };
  addEventListener('keydown',event=>{
   if(event.code!=='KeyG'||event.repeat||event.ctrlKey||event.metaKey||event.altKey||state!=='play'||!ship)return;
   const target=event.target;if(target&&(target.isContentEditable||['INPUT','TEXTAREA','SELECT'].includes(target.tagName)))return;
-  const deploying=ship.gear.target===1;
-  gear(deploying?1:.65,false,deploying);
+  gearStart(ship.gear.target===1);
  });
  const originalDust=spawnDust;
  spawnDust=function(x,y,speed,side){
