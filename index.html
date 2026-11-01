@@ -12,8 +12,7 @@
   .bar{height:9px;background:#16233d;border:1px solid #31456f;border-radius:5px;margin:3px 0 8px}
   .fill{height:100%;border-radius:4px}
   #fuelFill{background:#59c2ff} #hullFill{background:#7ee787} #crewFill{background:#ffd166} #happyFill{background:#c792ea}
-  #gvFill{background:#ff7b72} #glFill{background:#ffa657}
-  #env{position:absolute;top:14px;right:14px;width:300px;max-height:calc(100vh - 28px);overflow:auto;background:rgba(8,14,28,.68);border:1px solid #2b3d66;border-radius:8px;padding:12px;font-size:12.5px;line-height:1.45}
+  #env{position:absolute;top:14px;right:14px;width:300px;max-height:calc(100vh - 230px);overflow:auto;background:rgba(8,14,28,.68);border:1px solid #2b3d66;border-radius:8px;padding:12px;font-size:12.5px;line-height:1.45}
   #env h2{margin:0 0 7px;color:#8ab4ff;font-size:16px}
   #env dl{margin:0}
   #env dt{color:#9fb4d8;font-size:11px;text-transform:uppercase;letter-spacing:.5px;margin-top:7px}
@@ -46,14 +45,10 @@
   <div class="panel">
     <div>TIME <span id="time">0.0</span> s</div>
     <div>ALTITUDE <span id="alt">0</span> m</div>
-    <div>V-SPEED <span id="vs">0.0</span> m/s</div>
-    <div>H-SPEED <span id="hs">0.0</span> m/s</div>
     <div>FUEL <span id="fuelText"></span></div><div class="bar"><div id="fuelFill" class="fill" style="width:100%"></div></div>
     <div>HULL</div><div class="bar"><div id="hullFill" class="fill" style="width:100%"></div></div>
     <div>PASSENGER HEALTH</div><div class="bar"><div id="crewFill" class="fill" style="width:100%"></div></div>
     <div>PASSENGER HAPPINESS</div><div class="bar"><div id="happyFill" class="fill" style="width:100%"></div></div>
-    <div>VERTICAL G <span id="gv">0.0</span></div><div class="bar"><div id="gvFill" class="fill" style="width:0%"></div></div>
-    <div>LATERAL G <span id="gl">0.0</span></div><div class="bar"><div id="glFill" class="fill" style="width:0%"></div></div>
   </div>
 </div>
 <div id="env" class="hidden"></div>
@@ -72,14 +67,14 @@ const TARGET_TIME=90, SPEED_BONUS_RATE=10, SPEED_BONUS_MAX=900;
 const SAVE_KEY='orbitalExcursionsSave_v1';
 
 const MISSIONS=[
- {id:'lunar',name:'Lunar Shuttle Run',fare:500,gravity:9.81,padWidth:150,roughness:1,wind:0,startVx:18,startFuel:1,description:'A calm training run to the illuminated lunar pad.',unlockAt:0,
+ {id:'lunar',name:'Lunar Shuttle Run',fare:500,gravity:9.81,padWidth:150,roughness:1,wind:0,drag:0,startVx:18,startFuel:1,description:'A calm training run to the illuminated lunar pad.',unlockAt:0,
   environment:{title:'The Moon',body:'Earth’s only natural satellite',diameter:'3,474 km',gravity:'1.62 m/s² (16.6% of Earth)',atmosphere:'Effectively a vacuum; only a highly tenuous exosphere.',temperature:'Approximately 120 °C in sunlight to −171 °C in shadow.',hazards:'No atmospheric braking, extreme thermal swings, and abrasive regolith.',source:'Moon',url:'https://en.wikipedia.org/wiki/Moon'}},
- {id:'mars',name:'Mars Express',fare:900,gravity:5.5,padWidth:120,roughness:1.25,wind:0,startVx:26,startFuel:.9,description:'Low gravity, but a faster approach and a tighter landing zone.',unlockAt:1,
+ {id:'mars',name:'Mars Express',fare:900,gravity:5.5,padWidth:120,roughness:1.25,wind:0,drag:.015,startVx:26,startFuel:.9,description:'Low gravity, but a faster approach and a tighter landing zone.',unlockAt:1,
   environment:{title:'Mars',body:'Fourth planet from the Sun',diameter:'6,779 km',gravity:'3.72 m/s² (38% of Earth)',atmosphere:'Very thin, primarily carbon dioxide; surface pressure is a tiny fraction of Earth’s.',temperature:'Approximately −153 °C to 20 °C.',hazards:'Thin-air aerobraking, dust, low pressure, and elevated radiation exposure.',source:'Mars',url:'https://en.wikipedia.org/wiki/Mars'}},
- {id:'titan',name:'Titan Charter',fare:1400,gravity:2.8,padWidth:105,roughness:1.5,wind:7,startVx:30,startFuel:.85,description:'Thick atmosphere, crosswinds, and a narrow pad.',unlockAt:2,
+ {id:'titan',name:'Titan Charter',fare:1400,gravity:2.8,padWidth:105,roughness:1.5,wind:7,drag:.09,startVx:30,startFuel:.85,description:'Thick atmosphere, crosswinds, and a narrow pad.',unlockAt:2,
   environment:{title:'Titan',body:'Largest moon of Saturn',diameter:'5,149 km',gravity:'1.352 m/s² (13.8% of Earth)',atmosphere:'Dense nitrogen atmosphere with methane; surface pressure exceeds Earth’s.',temperature:'About −179.5 °C.',hazards:'Methane weather, hydrocarbon lakes, dense haze, and strong atmospheric drag.',source:'Titan (moon)',url:'https://en.wikipedia.org/wiki/Titan_(moon)'}},
- {id:'io',name:'Io Emergency',fare:2200,gravity:12.5,padWidth:95,roughness:1.8,wind:11,startVx:34,startFuel:.8,description:'High gravity, radiation gusts, and almost no margin for error.',unlockAt:3,
-  environment:{title:'Io',body:'Innermost Galilean moon of Jupiter',diameter:'About 3,642 km',gravity:'1.796 m/s² (18.3% of Earth)',atmosphere:'Extremely thin, dominated by sulfur dioxide.',temperature:'Cold surface, with intense local heating around volcanic features.',hazards:'Extreme volcanism, sulfur compounds, Jupiter’s radiation belts, and tidal stress.',source:'Io (moon)',url:'https://en.wikipedia.org/wiki/Io_(moon)'}}
+ {id:'io',name:'Io Emergency',fare:2200,gravity:12.5,padWidth:95,roughness:1.8,wind:11,drag:.002,startVx:34,startFuel:.8,description:'High gravity, radiation gusts, and almost no margin for error.',unlockAt:3,
+  environment:{title:'Io',body:'Innermost Galilean moon of Jupiter',diameter:'About 3,642 km',gravity:'1.796 m/s² (18.3% of Earth)',atmosphere:'Extremely thin, dominated by sulfur dioxide.',temperature:'Cold surface, with intense local heating around volcanic features.',hazards:'Extreme volcanism, sulfur compounds, radiation and tidal gusts, with negligible aerodynamic drag.',source:'Io (moon)',url:'https://en.wikipedia.org/wiki/Io_(moon)'}}
 ];
 
 const UPGRADES={
@@ -100,14 +95,21 @@ function loadSave(){
 function persist(){localStorage.setItem(SAVE_KEY,JSON.stringify(save));}
 
 const keys={};
+let showFlightInstruments=true,showTrajectory=true;
 addEventListener('keydown',e=>{
+ const target=e.target;
+ if(target&&(target.isContentEditable||['INPUT','TEXTAREA','SELECT'].includes(target.tagName)))return;
  keys[e.code]=true;
  if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space'].includes(e.code))e.preventDefault();
+ if(!e.repeat&&!e.ctrlKey&&!e.metaKey&&!e.altKey&&state==='play'){
+  if(e.code==='KeyH'){e.preventDefault();showFlightInstruments=!showFlightInstruments;}
+  if(e.code==='KeyT'){e.preventDefault();showTrajectory=!showTrajectory;}
+ }
  if(e.code==='Escape'&&(state==='missions'||state==='hangar'))showTitle();
 });
 addEventListener('keyup',e=>keys[e.code]=false);
 
-let ship,terrain,stars,state='title',t=0,missionTime=0,lastT=performance.now(),result=null,selectedMission=MISSIONS[0],windPhase=0;
+let ship,terrain,stars,state='title',t=0,missionTime=0,lastT=performance.now(),result=null,selectedMission=MISSIONS[0],windPhase=0,shipAccel={x:0,y:0};
 const screenEl=document.getElementById('screen'),envEl=document.getElementById('env');
 
 function makeTerrain(m){
@@ -150,7 +152,7 @@ function startMission(m){
  stars=Array.from({length:170},()=>({x:Math.random()*W,y:Math.random()*H*.72,r:Math.random()*1.5+.3,a:Math.random()*.7+.2}));
  const fuelMax=maxFuel();
  ship={x:120,y:120,vx:m.startVx,vy:0,angle:0,angVel:0,fuel:fuelMax*m.startFuel,fuelMax,hull:maxHull(),hullMax:maxHull(),crew:100,happiness:100,thrusting:false,rcsL:false,rcsR:false,gVert:0,gLat:0,prevVx:0,prevVy:0,peakG:0};
- missionTime=0;result=null;windPhase=0;
+ missionTime=0;result=null;windPhase=0;shipAccel={x:0,y:0};
  state='play';
  screenEl.style.display='none';
  screenEl.classList.add('hidden');
@@ -189,6 +191,11 @@ function update(dt){
  }
  if(s.rcsL){ax-=rcsPower();s.fuel=Math.max(0,s.fuel-1.8*dt);}
  if(s.rcsR){ax+=rcsPower();s.fuel=Math.max(0,s.fuel-1.8*dt);}
+
+ const drag=m.drag||0;
+ ax-=s.vx*drag;
+ ay-=s.vy*drag;
+ shipAccel={x:ax,y:ay};
 
  s.vx+=ax*dt;s.vy+=ay*dt;
  s.x+=s.vx*SCALE*dt;s.y+=s.vy*SCALE*dt;
@@ -260,20 +267,84 @@ function draw(){
   ctx.fillStyle=`rgba(120,220,255,${.25+blink*.65})`;
   ctx.fillRect(p.x+8+i*((p.w-16)/4)-2,p.y-4,5,5);
  }
+ if(showTrajectory&&state==='play')drawTrajectory();
  drawShip();
+ if(showFlightInstruments&&state==='play')drawShipReadouts();
  document.getElementById('time').textContent=missionTime.toFixed(1);
  document.getElementById('alt').textContent=Math.max(0,Math.round((terrainYAt(ship.x)-ship.y-18)/SCALE));
- document.getElementById('vs').textContent=ship.vy.toFixed(1);
- document.getElementById('hs').textContent=ship.vx.toFixed(1);
- document.getElementById('gv').textContent=ship.gVert.toFixed(1);
- document.getElementById('gl').textContent=ship.gLat.toFixed(1);
  document.getElementById('fuelText').textContent=`${Math.round(ship.fuel)} / ${ship.fuelMax}`;
  document.getElementById('fuelFill').style.width=(ship.fuel/ship.fuelMax*100)+'%';
  document.getElementById('hullFill').style.width=(ship.hull/ship.hullMax*100)+'%';
  document.getElementById('crewFill').style.width=ship.crew+'%';
  document.getElementById('happyFill').style.width=ship.happiness+'%';
- document.getElementById('gvFill').style.width=Math.min(100,ship.gVert/10*100)+'%';
- document.getElementById('glFill').style.width=Math.min(100,ship.gLat/10*100)+'%';
+}
+
+function drawShipReadouts(){
+ const s=ship,margin=10,bw=Math.min(180,Math.max(1,W-20)),bh=88;
+ const clamp=(v,lo,hi)=>Math.max(lo,Math.min(v,Math.max(lo,hi)));
+ const obstacles=[document.querySelector('#hud .panel'),envEl].filter(el=>el&&!el.closest('.hidden')).map(el=>el.getBoundingClientRect());
+ const candidates=[
+  {x:s.x+48,y:s.y-112},{x:s.x-48-bw,y:s.y-112},
+  {x:s.x+48,y:s.y+34},{x:s.x-48-bw,y:s.y+34},
+  {x:s.x-bw/2,y:s.y+48},{x:s.x-bw/2,y:s.y-48-bh}
+ ].map(p=>({x:clamp(p.x,margin,W-bw-margin),y:clamp(p.y,margin,H-bh-margin)}));
+ const overlap=(p,r)=>Math.max(0,Math.min(p.x+bw,r.right+6)-Math.max(p.x,r.left-6))*Math.max(0,Math.min(p.y+bh,r.bottom+6)-Math.max(p.y,r.top-6));
+ const shipRect={left:s.x-25,right:s.x+25,top:s.y-25,bottom:s.y+25};
+ const score=p=>obstacles.reduce((sum,r)=>sum+overlap(p,r),0)+overlap(p,shipRect)*2;
+ const box=candidates.reduce((best,p)=>score(p)<score(best)?p:best);
+ const x=box.x,y=box.y,ex=clamp(s.x,x,x+bw),ey=clamp(s.y,y,y+bh);
+ const dx=ex-s.x,dy=ey-s.y,len=Math.hypot(dx,dy)||1;
+ ctx.save();ctx.globalAlpha=1;ctx.lineWidth=1;
+ ctx.strokeStyle='rgba(159,180,216,.8)';
+ ctx.beginPath();ctx.moveTo(s.x+dx/len*25,s.y+dy/len*25);
+ ctx.lineTo(ex-dx/len*12,ey-dy/len*12);ctx.lineTo(ex,ey);ctx.stroke();
+ ctx.fillStyle='rgba(8,14,28,.82)';ctx.fillRect(x,y,bw,bh);ctx.strokeRect(x,y,bw,bh);
+ ctx.font='11px ui-monospace,monospace';ctx.textBaseline='middle';
+ const rows=[
+  ['SPEED',Math.hypot(s.vx,s.vy).toFixed(1)+' m/s','#dfe7ff'],
+  ['VERT',s.vy.toFixed(1)+' m/s','#59c2ff'],
+  ['HORIZ',s.vx.toFixed(1)+' m/s','#ffa657'],
+  ['G-LOAD',Math.hypot(s.gVert,s.gLat).toFixed(1)+' g','#7ee787']
+ ];
+ rows.forEach(([label,value,color],i)=>{
+  ctx.fillStyle=color;ctx.textAlign='left';ctx.fillText(label,x+10,y+14+i*20);
+  ctx.textAlign='right';ctx.fillText(value,x+bw-10,y+14+i*20);
+ });
+ ctx.restore();
+}
+
+function drawTrajectory(){
+ const dt=1/60,steps=480,m=selectedMission;
+ let x=ship.x,y=ship.y,vx=ship.vx,vy=ship.vy,impact=null;
+ const points=[{x,y}];
+ for(let i=1;i<=steps;i++){
+  const oldX=x,oldY=y,drag=m.drag||0;
+  const ax=(m.wind?Math.sin((windPhase+i*dt)*.7)*m.wind*.08:0)-vx*drag;
+  const ay=m.gravity-vy*drag;
+  vx+=ax*dt;vy+=ay*dt;x+=vx*SCALE*dt;y+=vy*SCALE*dt;
+  if(x<20||x>W-20||y<20){points.push({x,y});break;}
+  if(y+18>=terrainYAt(x)){
+   let lo=0,hi=1;
+   for(let j=0;j<10;j++){
+    const f=(lo+hi)/2,px=oldX+(x-oldX)*f,py=oldY+(y-oldY)*f;
+    if(py+18>=terrainYAt(px))hi=f;else lo=f;
+   }
+   x=oldX+(x-oldX)*hi;y=oldY+(y-oldY)*hi;
+   points.push({x,y});impact={x,y:y+18};break;
+  }
+  if(i%4===0)points.push({x,y});
+ }
+ if(points.length<2)return;
+ ctx.save();ctx.globalAlpha=.6;ctx.strokeStyle='#7fd1ff';ctx.lineWidth=1;ctx.setLineDash([5,5]);
+ ctx.beginPath();ctx.moveTo(points[0].x,points[0].y);
+ for(let i=1;i<points.length;i++)ctx.lineTo(points[i].x,points[i].y);
+ ctx.stroke();ctx.setLineDash([]);
+ if(impact){
+  ctx.strokeStyle='#ffd166';ctx.beginPath();
+  ctx.moveTo(impact.x-5,impact.y-5);ctx.lineTo(impact.x+5,impact.y+5);
+  ctx.moveTo(impact.x+5,impact.y-5);ctx.lineTo(impact.x-5,impact.y+5);ctx.stroke();
+ }
+ ctx.restore();
 }
 
 function drawShip(){
@@ -314,6 +385,7 @@ function showTitle(){
   </div>
   <h2>Flight controls</h2>
   <p><kbd>W</kbd>/<kbd>&uarr;</kbd> main engine &nbsp; <kbd>A</kbd>/<kbd>D</kbd> RCS &nbsp; <kbd>Q</kbd>/<kbd>E</kbd> rotate</p>
+  <p><kbd>H</kbd> flight callout &nbsp; <kbd>T</kbd> coasting trajectory (engines off)</p>
   <p>Land gently on the pad, preserve fuel, protect passengers, and arrive quickly.</p>
  `);
 }
