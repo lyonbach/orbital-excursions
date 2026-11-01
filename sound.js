@@ -55,37 +55,45 @@ const FlightSound=(()=>{
    tone.connect(envelope);envelope.connect(master);voices.add(tone);tone.onended=()=>{voices.delete(tone);tone.disconnect();envelope.disconnect();};tone.start(now);tone.stop(now+duration);
   }
  }
- function gear(strength=1,final=false){
+ function gear(strength=1,final=false,deploying=true){
   if(!audio||failed||!ready||muted||document.hidden||!document.hasFocus()||audio.state!=='running')return;
-  const now=audio.currentTime,s=Math.max(.35,Math.min(1.5,strength));
-  const click=now,scrape=now+.08,knock=final?now+.025:now+.17;
-  tail=Math.max(tail,knock+.16);
+  const now=audio.currentTime,s=Math.max(.3,Math.min(1.6,strength));
+  const click=now,scrape=now+.045,knock=final?now+.10:now+.13;
+  tail=Math.max(tail,knock+.13);
   const clickSource=noise(),clickFilter=audio.createBiquadFilter(),clickGain=audio.createGain();
-  clickSource.loop=false;clickFilter.type='highpass';clickFilter.frequency.value=1500;
-  clickGain.gain.setValueAtTime(0,click);clickGain.gain.linearRampToValueAtTime(.11*s,click+.002);clickGain.gain.exponentialRampToValueAtTime(.0001,click+.018);
+  clickSource.loop=false;clickFilter.type='highpass';clickFilter.frequency.value=1250;
+  clickGain.gain.setValueAtTime(0,click);clickGain.gain.linearRampToValueAtTime(.085*s,click+.002);clickGain.gain.exponentialRampToValueAtTime(.0001,click+.016);
   clickSource.connect(clickFilter);clickFilter.connect(clickGain);clickGain.connect(master);
   voices.add(clickSource);clickSource.onended=()=>{voices.delete(clickSource);clickSource.disconnect();clickFilter.disconnect();clickGain.disconnect();};
-  clickSource.start(click);clickSource.stop(click+.03);
+  clickSource.start(click);clickSource.stop(click+.025);
   const scrapeSource=noise(),scrapeFilter=audio.createBiquadFilter(),scrapeGain=audio.createGain();
-  scrapeSource.loop=false;scrapeFilter.type='bandpass';scrapeFilter.Q.value=1.1;
-  scrapeFilter.frequency.setValueAtTime(460,scrape);scrapeFilter.frequency.exponentialRampToValueAtTime(230,scrape+.11);
-  scrapeGain.gain.setValueAtTime(0,scrape);scrapeGain.gain.linearRampToValueAtTime(.05*s,scrape+.014);scrapeGain.gain.exponentialRampToValueAtTime(.0001,scrape+.115);
+  scrapeSource.loop=false;scrapeFilter.type='bandpass';scrapeFilter.Q.value=1.25;
+  scrapeFilter.frequency.setValueAtTime(deploying?620:780,scrape);
+  scrapeFilter.frequency.exponentialRampToValueAtTime(deploying?340:460,scrape+.07);
+  scrapeGain.gain.setValueCurveAtTime(new Float32Array([0,.7,1,.55,.9,.4,.65,0]),scrape,.07);
   scrapeSource.connect(scrapeFilter);scrapeFilter.connect(scrapeGain);scrapeGain.connect(master);
   voices.add(scrapeSource);scrapeSource.onended=()=>{voices.delete(scrapeSource);scrapeSource.disconnect();scrapeFilter.disconnect();scrapeGain.disconnect();};
-  scrapeSource.start(scrape);scrapeSource.stop(scrape+.14);
+  scrapeSource.start(scrape);scrapeSource.stop(scrape+.09);
   const knockTone=audio.createOscillator(),knockGain=audio.createGain();
-  knockTone.type='sine';knockTone.frequency.setValueAtTime(final?66:80,knock);
-  knockTone.frequency.exponentialRampToValueAtTime(final?32:38,knock+.085);
-  knockGain.gain.setValueAtTime(0,knock);knockGain.gain.linearRampToValueAtTime(.30*s,knock+.004);knockGain.gain.exponentialRampToValueAtTime(.0001,knock+.12);
+  knockTone.type='sine';knockTone.frequency.setValueAtTime(deploying?105:125,knock);
+  knockTone.frequency.exponentialRampToValueAtTime(deploying?48:58,knock+.055);
+  knockGain.gain.setValueAtTime(0,knock);knockGain.gain.linearRampToValueAtTime(.27*s,knock+.003);knockGain.gain.exponentialRampToValueAtTime(.0001,knock+.075);
   knockTone.connect(knockGain);knockGain.connect(master);
   voices.add(knockTone);knockTone.onended=()=>{voices.delete(knockTone);knockTone.disconnect();knockGain.disconnect();};
-  knockTone.start(knock);knockTone.stop(knock+.16);
+  knockTone.start(knock);knockTone.stop(knock+.1);
   const bodySource=noise(),bodyFilter=audio.createBiquadFilter(),bodyGain=audio.createGain();
-  bodySource.loop=false;bodyFilter.type='lowpass';bodyFilter.frequency.value=210;
-  bodyGain.gain.setValueAtTime(.13*s,knock);bodyGain.gain.exponentialRampToValueAtTime(.0001,knock+.05);
+  bodySource.loop=false;bodyFilter.type='lowpass';bodyFilter.frequency.value=240;
+  bodyGain.gain.setValueAtTime(.11*s,knock);bodyGain.gain.exponentialRampToValueAtTime(.0001,knock+.04);
   bodySource.connect(bodyFilter);bodyFilter.connect(bodyGain);bodyGain.connect(master);
   voices.add(bodySource);bodySource.onended=()=>{voices.delete(bodySource);bodySource.disconnect();bodyFilter.disconnect();bodyGain.disconnect();};
-  bodySource.start(knock);bodySource.stop(knock+.07);
+  bodySource.start(knock);bodySource.stop(knock+.055);
+  const followTime=knock+.045,follow=audio.createOscillator(),followGain=audio.createGain();
+  follow.type='sine';follow.frequency.setValueAtTime(deploying?72:88,followTime);
+  follow.frequency.exponentialRampToValueAtTime(deploying?40:48,followTime+.04);
+  followGain.gain.setValueAtTime(0,followTime);followGain.gain.linearRampToValueAtTime(.15*s,followTime+.002);followGain.gain.exponentialRampToValueAtTime(.0001,followTime+.05);
+  follow.connect(followGain);followGain.connect(master);
+  voices.add(follow);follow.onended=()=>{voices.delete(follow);follow.disconnect();followGain.disconnect();};
+  follow.start(followTime);follow.stop(followTime+.07);
  }
  button.addEventListener('click',()=>{muted=!muted;button.textContent=muted?'SOUND: OFF':'SOUND: ON';button.setAttribute('aria-pressed',String(muted));if(muted)silence();else unlock();});
  slider.addEventListener('input',()=>{volume=Number(slider.value)/100;unlock();});
@@ -102,12 +110,14 @@ const FlightSound=(()=>{
   originalUpdate(dt);
   if(!playing||ship!==current)return;
   const after=current.gear.progress;
-  if((target===1&&before<.999&&after>=.999)||(target===0&&before>.001&&after<=.001))gear(1.15,true);
+  if(target===1&&before<.999&&after>=.999)gear(1.2,true,true);
+  if(target===0&&before>.001&&after<=.001)gear(.9,true,false);
  };
  addEventListener('keydown',event=>{
   if(event.code!=='KeyG'||event.repeat||event.ctrlKey||event.metaKey||event.altKey||state!=='play'||!ship)return;
   const target=event.target;if(target&&(target.isContentEditable||['INPUT','TEXTAREA','SELECT'].includes(target.tagName)))return;
-  gear(.75,false);
+  const deploying=ship.gear.target===1;
+  gear(deploying?1:.65,false,deploying);
  });
  const originalDust=spawnDust;
  spawnDust=function(x,y,speed,side){
