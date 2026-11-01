@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Kestrel flight test</title><style>body{margin:0;background:#080e1c;color:#dfe7ff;font:14px monospace}canvas{display:block;width:100vw;height:100vh}aside{position:absolute;top:12px;left:12px;background:#080e1cdd;padding:12px;pointer-events:none}a,button{pointer-events:auto;color:#dfe7ff;background:#24334d}pre{margin-bottom:0}</style></head>
+<body><canvas id="test"></canvas><aside>Kestrel experimental flight test<br>W / Up: lift · Q/E: turn · A/D: weak RCS<br>R: reset · Space: pause · No campaign saves<br><button id="reset">RESET</button> <a href="index.html">CAMPAIGN</a><pre id="readout"></pre></aside>
+<script src="kestrel-physics.js?v=kestrel-test-1"></script>
+<script>
+'use strict';
+const canvas=document.getElementById('test'),ctx=canvas.getContext('2d'),readout=document.getElementById('readout');
+const keys=new Set(),scale=8,gravity=8.2;
+let w,h,ship,paused=false,last=0,accumulator=0,contact=false;
+function resize(){w=canvas.width=innerWidth;h=canvas.height=innerHeight;}
+function reset(){ship={x:w/2,y:h*.4,vx:0,vy:0,angle:0,angVel:0,fuel:200};contact=false;accumulator=0;}
+addEventListener('resize',()=>{resize();reset();});resize();reset();
+document.getElementById('reset').onclick=reset;
+addEventListener('keydown',e=>{if(['ArrowUp','Space','KeyW','KeyA','KeyD','KeyQ','KeyE','KeyR'].includes(e.code))e.preventDefault();keys.add(e.code);if(!e.repeat&&e.code==='KeyR')reset();if(!e.repeat&&e.code==='Space'){paused=!paused;accumulator=0;}});
+addEventListener('keyup',e=>keys.delete(e.code));
+addEventListener('blur',()=>{keys.clear();paused=true;});
+const hull=[[-72,-14],[-38,-14],[-18,-26],[8,-26],[28,-14],[72,-14],[72,14],[34,14],[14,4],[-20,4],[-38,14],[-72,14]];
+function tick(dt){
+ if(contact){ship.jets=[];return;}
+ const commands=KestrelPhysics.prepare(ship,{main:keys.has('KeyW')||keys.has('ArrowUp'),left:keys.has('KeyA'),right:keys.has('KeyD'),ccw:keys.has('KeyQ'),cw:keys.has('KeyE')},dt);
+ ship.jets=commands.jets;ship.engines=commands.engines;ship.fuel=Math.max(0,ship.fuel-commands.fuelUsed);
+ const force=KestrelPhysics.wrench(commands.jets,ship.angle,scale);
+ ship.vx+=force.ax*dt;ship.vy+=(force.ay+gravity)*dt;ship.angVel+=force.alpha*dt;
+ ship.x+=ship.vx*scale*dt;ship.y+=ship.vy*scale*dt;ship.angle=Math.atan2(Math.sin(ship.angle+ship.angVel*dt),Math.cos(ship.angle+ship.angVel*dt));
+ const c=Math.cos(ship.angle),s=Math.sin(ship.angle),shape=hull.concat([[-54,30],[54,30]]);
+ const points=shape.map(([x,y])=>({x:ship.x+x*c-y*s,y:ship.y+x*s+y*c}));
+ contact=points.some(p=>p.y>=h-40||p.y<=0||p.x<=0||p.x>=w);
+}
+function render(){
+ ctx.fillStyle='#080e1c';ctx.fillRect(0,0,w,h);ctx.strokeStyle='#17263b';ctx.lineWidth=1;
+ for(let x=0;x<w;x+=80){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,h);ctx.stroke();}
+ for(let y=0;y<h;y+=80){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(w,y);ctx.stroke();}
+ ctx.fillStyle='#304059';ctx.fillRect(0,h-40,w,40);
+ ctx.save();ctx.translate(ship.x,ship.y);ctx.rotate(ship.angle);
+ for(const jet of ship.jets||[]){const magnitude=Math.hypot(jet.fx,jet.fy);if(!magnitude)continue;const dx=-jet.fx/magnitude,dy=-jet.fy/magnitude,length=(jet.name==='main'?42:10)*jet.strength,width=jet.name==='main'?7:2;ctx.fillStyle=jet.name==='main'?'#ffad55':'#7fd1ff';ctx.beginPath();ctx.moveTo(jet.x-dy*width,jet.y+dx*width);ctx.lineTo(jet.x+dy*width,jet.y-dx*width);ctx.lineTo(jet.x+dx*length,jet.y+dy*length);ctx.closePath();ctx.fill();}
+ ctx.fillStyle='#8997a5';ctx.strokeStyle='#dfe7ff';ctx.lineWidth=2;ctx.beginPath();hull.forEach(([x,y],i)=>i?ctx.lineTo(x,y):ctx.moveTo(x,y));ctx.closePath();ctx.fill();ctx.stroke();
+ for(const x of [-54,54]){ctx.fillStyle='#4d6075';ctx.fillRect(x-9,-17,18,34);ctx.strokeRect(x-9,-17,18,34);ctx.beginPath();ctx.moveTo(x,17);ctx.lineTo(x,30);ctx.lineTo(x+8,30);ctx.stroke();}
+ ctx.fillStyle='#79c7e8';ctx.fillRect(42,-9,20,7);ctx.restore();
+ const engines=ship.engines||{left:0,right:0};
+ readout.textContent=[paused?'PAUSED':contact?'CONTACT — R TO RESET':'FREE FLIGHT',`Fuel: ${ship.fuel.toFixed(1)} / 200`,`VX: ${ship.vx.toFixed(2)} m/s   VY: ${ship.vy.toFixed(2)} m/s`,`Rotation: ${(ship.angVel*180/Math.PI).toFixed(1)} deg/s`,`Left: ${engines.left.toFixed(2)}   Right: ${engines.right.toFixed(2)}`,'Gravity: 8.2 m/s² · No wind / drag','Contact stops test; no landing simulation'].join('\n');
+}
+function frame(time){const elapsed=last?Math.min(.1,(time-last)/1000):0;last=time;if(!paused){accumulator+=elapsed;while(accumulator>=1/120){tick(1/120);accumulator-=1/120;}}render();requestAnimationFrame(frame);}
+requestAnimationFrame(frame);
+</script></body></html>
