@@ -337,6 +337,7 @@ function draw(){
   ctx.fillStyle=`rgba(120,220,255,${.25+blink*.65})`;
   ctx.fillRect(p.x+8+i*((p.w-16)/4)-2,p.y-4,5,5);
  }
+ drawWindsock(selectedMission);
  drawDust();
  if(showTrajectory&&state==='play')drawTrajectory();
  drawShip();
@@ -354,6 +355,42 @@ function draw(){
  document.getElementById('hullFill').style.width=(ship.hull/ship.hullMax*100)+'%';
  document.getElementById('crewFill').style.width=ship.crew+'%';
  document.getElementById('happyFill').style.width=ship.happiness+'%';
+}
+
+function drawWindsock(m){
+ if(m.wind<=0)return;
+ const wind=Math.sin(windPhase*.7)*m.wind*.08;
+ const maxWind=m.wind*.08;
+ const strength=Math.min(1,Math.abs(wind)/maxWind);
+ const direction=wind>=0?1:-1;
+ const poleX=terrain.pad.x-26;
+ const poleTop=terrain.pad.y-36;
+ ctx.strokeStyle='#9fb4d8';
+ ctx.lineWidth=2;
+ ctx.beginPath();
+ ctx.moveTo(poleX,terrain.pad.y);
+ ctx.lineTo(poleX,poleTop);
+ ctx.stroke();
+ const length=10+28*strength;
+ const flutter=Math.sin(t*7)*3*strength;
+ const tipX=poleX+direction*length;
+ const tipY=poleTop+flutter;
+ ctx.fillStyle='#ff8c42';
+ ctx.beginPath();
+ ctx.moveTo(poleX,poleTop-3.5);
+ ctx.lineTo(tipX,tipY-1.5);
+ ctx.lineTo(tipX,tipY+1.5);
+ ctx.lineTo(poleX,poleTop+3.5);
+ ctx.closePath();
+ ctx.fill();
+ ctx.fillStyle='#ffffff';
+ ctx.beginPath();
+ ctx.moveTo(poleX+direction*length*.45,poleTop-2.2+flutter*.45);
+ ctx.lineTo(poleX+direction*length*.65,tipY-1+flutter*.65);
+ ctx.lineTo(poleX+direction*length*.65,tipY+1+flutter*.65);
+ ctx.lineTo(poleX+direction*length*.45,poleTop+2.2+flutter*.45);
+ ctx.closePath();
+ ctx.fill();
 }
 
 function drawShipReadouts(){
