@@ -10,17 +10,20 @@ const EnvironmentVisuals=(()=>{
  const theme=()=>themes[key()]||themes.lunar;
  const windDust=[];
  function spawnWindDust(dt){
-  const wind=selectedMission.wind||0,magnitude=Math.abs(wind);
-  if(magnitude>=.12){
-   const target=Math.min(24,Math.floor(magnitude*11));
+  const windMax=(selectedMission.wind||0)*.08;
+  const windValue=Math.sin(windPhase*.7)*windMax;
+  const windStrength=windMax?Math.min(1,Math.abs(windValue)/windMax):0;
+  const magnitude=Math.abs(windValue);
+  if(magnitude>=.012){
+   const target=Math.min(24,Math.floor(magnitude*130));
    while(windDust.length<target)windDust.push({
-    x:wind>0?-20:W+20,y:H*(.58+Math.random()*.26),
+    x:windValue>0?-20:W+20,y:H*(.58+Math.random()*.26),
     size:.8+Math.random()*1.7,life:1.1+Math.random()*1.2,age:0,
-    rise:3+Math.random()*9
+    rise:1+Math.random()*3+windStrength*2
    });
   }
   for(const p of windDust){
-   p.age+=dt;p.x+=wind*(55+p.size*22)*dt;p.y-=p.rise*dt;
+   p.age+=dt;p.x+=windValue*(700+p.size*160)*dt;p.y-=p.rise*dt;
   }
   for(let i=windDust.length-1;i>=0;i--){
    const p=windDust[i];
@@ -155,19 +158,31 @@ const EnvironmentVisuals=(()=>{
   ctx.stroke();
   ctx.fillStyle='#7c4f22';
   ctx.fillRect(-5,-28,10,6);
-  const vane=Math.sin(t*2.4)*.65;
+  const windMax=(selectedMission.wind||0)*.08;
+  const windValue=Math.sin(windPhase*.7)*windMax;
+  const windStrength=windMax?Math.min(1,Math.abs(windValue)/windMax):0;
+  const vane=windMax?windValue/windMax*.9:0;
+  const blade=10+9*windStrength;
   ctx.translate(0,-25);
   ctx.rotate(vane);
   ctx.fillStyle='#d9a44a';
   ctx.beginPath();
   ctx.moveTo(0,0);
-  ctx.lineTo(17,-4);
-  ctx.lineTo(17,4);
+  ctx.lineTo(blade,-4);
+  ctx.lineTo(blade,4);
   ctx.closePath();
   ctx.fill();
   ctx.strokeStyle='#5d3a18';
   ctx.lineWidth=1.5;
   ctx.stroke();
+  ctx.fillStyle='#ffffff';
+  ctx.beginPath();
+  ctx.moveTo(blade*.45,-2.2);
+  ctx.lineTo(blade*.65,-1);
+  ctx.lineTo(blade*.65,1);
+  ctx.lineTo(blade*.45,2.2);
+  ctx.closePath();
+  ctx.fill();
   ctx.restore();
   const pulse=.35+Math.abs(Math.sin(t*(2+speed*4)))*.65;
   ctx.fillStyle=`rgba(255,140,66,${pulse})`;
