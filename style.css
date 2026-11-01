@@ -1,0 +1,32 @@
+  html,body{margin:0;height:100%;background:#05070f;color:#dfe7ff;font-family:ui-monospace,monospace;overflow:hidden}
+  #wrap{position:relative;width:100vw;height:100vh}
+  canvas{display:block;width:100%;height:100%}
+  #hud{position:absolute;inset:0;pointer-events:none;padding:14px;font-size:13px;line-height:1.35}
+  .panel{background:rgba(8,14,28,.62);border:1px solid #2b3d66;border-radius:8px;padding:10px 12px;width:280px}
+  .bar{height:9px;background:#16233d;border:1px solid #31456f;border-radius:5px;margin:3px 0 8px}
+  .fill{height:100%;border-radius:4px}
+  #fuelFill{background:#59c2ff} #hullFill{background:#7ee787} #crewFill{background:#ffd166} #happyFill{background:#c792ea}
+  #env{position:absolute;top:14px;right:14px;width:300px;max-height:calc(100vh - 230px);overflow:auto;background:rgba(8,14,28,.68);border:1px solid #2b3d66;border-radius:8px;padding:12px;font-size:12.5px;line-height:1.45}
+  #env h2{margin:0 0 7px;color:#8ab4ff;font-size:16px}
+  #env dl{margin:0}
+  #env dt{color:#9fb4d8;font-size:11px;text-transform:uppercase;letter-spacing:.5px;margin-top:7px}
+  #env dd{margin:1px 0 0}
+  #env a{color:#7fd1ff;text-decoration:none}
+  #env a:hover{text-decoration:underline}
+  .source{margin-top:9px;padding-top:7px;border-top:1px solid #2b3d66;color:#9fb4d8;font-size:11px}
+  #screen{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(4,7,15,.88);backdrop-filter:blur(3px)}
+  .card{width:min(760px,92vw);max-height:88vh;overflow:auto;background:rgba(8,14,28,.94);border:1px solid #2b3d66;border-radius:12px;padding:24px}
+  h1{margin:0;color:#8ab4ff;font-size:30px;letter-spacing:2px}
+  h2{margin:18px 0 8px;color:#9ecbff;font-size:17px}
+  p{margin:6px 0;font-size:14px}
+  .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+  button{font:inherit;color:#dfe7ff;background:#16233d;border:1px solid #31456f;border-radius:7px;padding:9px 14px;cursor:pointer}
+  button:hover:not(:disabled){background:#20345a;border-color:#7fa8ff}
+  button:disabled{opacity:.45;cursor:not-allowed}
+  .mission,.upgrade{border:1px solid #2b3d66;border-radius:9px;padding:12px;margin:9px 0;background:rgba(15,25,45,.6)}
+  .mission h3,.upgrade h3{margin:0 0 5px;color:#cfe3ff;font-size:15px}
+  .small{font-size:12px;color:#9fb4d8}
+  .good{color:#7ee787}.warn{color:#ffd166}.bad{color:#ff7b72}
+  kbd{background:#16233d;border:1px solid #31456f;border-radius:4px;padding:1px 5px}
+  .hidden{display:none !important}
+  .credits{color:#ffd166;font-weight:bold}
