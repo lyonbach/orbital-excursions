@@ -5,7 +5,7 @@ const FuelEconomy=(()=>{
  const money=v=>v.toFixed(2);
  const units=v=>v.toFixed(2);
  const capacity=s=>100+20*s.upgrades.fuel;
- function fresh(){return {credits:200,fuel:0,debt:0,economyVersion:1,upgrades:{engine:0,fuel:0,hull:0,rcs:0},completed:[]};}
+ function fresh(){return {credits:200,fuel:0,hull:100,debt:0,economyVersion:1,upgrades:{engine:0,fuel:0,hull:0,rcs:0},completed:[]};}
  function migrate(raw){
   if(!raw||typeof raw!=='object'||Array.isArray(raw))return fresh();
   const s=fresh();
@@ -13,6 +13,8 @@ const FuelEconomy=(()=>{
   for(const id of Object.keys(s.upgrades))s.upgrades[id]=Math.min(3,Math.floor(nonnegative(raw.upgrades&&raw.upgrades[id])));
   s.completed=Array.isArray(raw.completed)?raw.completed.filter(v=>typeof v==='string'):[];
   s.fuel=Object.prototype.hasOwnProperty.call(raw,'fuel')?Math.min(capacity(s),nonnegative(raw.fuel)):capacity(s);
+  const hullMax=100+15*s.upgrades.hull;
+  s.hull=Object.prototype.hasOwnProperty.call(raw,'hull')?Math.min(hullMax,nonnegative(raw.hull)):hullMax;
   return s;
  }
  function quote(s,request){
@@ -64,4 +66,54 @@ const FuelEconomy=(()=>{
   </div>`;
  }
  return {price,fresh,migrate,capacity,quote,purchase,canBorrow,borrow,settle,panel,money};
+})();
+
+const RepairShop=(()=>{
+ const price=3,epsilon=1e-6;
+ const capacity=s=>100+15*s.upgrades.hull;
+ const money=v=>v.toFixed(2);
+ function quote(s,request){
+  const missing=Math.max(0,capacity(s)-s.hull);
+  const requested=request==='all'?missing:Number.isFinite(request)?Math.max(0,request):0;
+  const budget=Math.floor((s.credits+1e-9)*100);
+  const amount=Math.min(missing,requested,budget/(price*100));
+  const cost=Math.min(budget,Math.ceil(amount*price*100-1e-7))/100;
+  return {amount,cost};
+ }
+ function repair(s,request){
+  const q=quote(s,request);
+  if(q.amount<=epsilon||q.cost>s.credits+1e-9)return false;
+  s.hull=Math.min(capacity(s),s.hull+q.amount);
+  s.credits=Math.round(Math.max(0,s.credits-q.cost)*100)/100;
+  return q;
+ }
+ const canBorrow=s=>s.hull<=epsilon&&s.credits<price;
+ function borrow(s){
+  if(!canBorrow(s))return false;
+  const amount=Math.max(0,capacity(s)*.5-s.hull);
+  const cost=Math.ceil(amount*price*100-1e-7)/100;
+  s.hull+=amount;s.debt=Math.round((s.debt+cost)*100)/100;
+  return {amount,cost};
+ }
+ function panel(s){
+  const cap=capacity(s),missing=Math.max(0,cap-s.hull);
+  const condition=s.hull<=epsilon?'DESTROYED — REPAIR REQUIRED':missing<=epsilon?'NO REPAIRS NEEDED':`${missing.toFixed(2)} hull points damaged`;
+  const buttons=[10,'all'].map(request=>{
+   const q=quote(s,request),label=request==='all'?'Repair all (affordable)':'Repair up to 10 points';
+   const arg=request==='all'?"'all'":request;
+   return `<button type="button" ${q.amount<=epsilon?'disabled':''} onclick="repairHull(${arg})">${label} — ${q.amount.toFixed(2)} points / ${money(q.cost)} cr</button>`;
+  }).join('');
+  const loanCost=Math.ceil(cap*.5*price*100)/100;
+  return `<div class="upgrade"><h3>Repair shop</h3>
+   <p>Hull: ${s.hull.toFixed(2)} / ${cap} — ${Math.round(s.hull/cap*100)}%</p>
+   <div class="bar"><div class="fill" style="width:${s.hull/cap*100}%;background:#7ee787"></div></div>
+   <p class="${s.hull<=epsilon?'bad':missing>epsilon?'warn':'good'}">${condition}</p>
+   <p class="small">${price} cr per hull point. Repair costs round up to the nearest 0.01 cr. Damage carries across missions, retries, and reloads. Hull upgrades add capacity, not repairs.</p>
+   <div class="row">${buttons}</div>
+   <h3 style="margin-top:14px">Emergency rebuilding</h3>
+   <p class="small">Available only at zero hull with less than ${price} cr. Restore to 50% hull, add the repair cost to your existing debt, and receive no spendable credits. No interest; successful missions repay debt first.</p>
+   <button type="button" ${canBorrow(s)?'':'disabled'} onclick="borrowEmergencyRepair()">Emergency repair — ${ (cap*.5).toFixed(2)} hull / ${money(loanCost)} cr debt</button>
+  </div>`;
+ }
+ return {price,capacity,quote,repair,canBorrow,borrow,panel};
 })();
