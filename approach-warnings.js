@@ -1,8 +1,8 @@
 const ApproachWarnings=(()=>{
  const levels=[
-  [60,'APPROACHING MINIMUMS'],[50,'MINIMUMS — FIFTY METRES'],
-  [40,'FORTY METRES'],[30,'THIRTY METRES'],[20,'TWENTY METRES'],
-  [10,'TEN METRES'],[5,'FIVE METRES']
+  [60,'APPROACHING MINIMUMS'],[50,'MINIMUMS — FIFTY...'],
+  [40,'FORTY...'],[30,'THIRTY...'],[20,'TWENTY...'],
+  [10,'TEN...'],[5,'RETARD...']
  ];
  function create(altitude){
   return {previous:altitude,armed:new Set(levels.filter(([h])=>altitude>h).map(([h])=>h)),message:null,remaining:0,warning:null,approach:false};

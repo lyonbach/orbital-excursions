@@ -8,7 +8,7 @@ const SAFE_VS=2.2, SAFE_HS=1.6, SAFE_G=3.5, HARD_G=6.5;
 const BASE_FARE=500, FUEL_BONUS_MAX=500, HAPPINESS_RATE=5;
 const TARGET_TIME=90, SPEED_BONUS_RATE=10, SPEED_BONUS_MAX=900;
 const SAVE_KEY='orbitalExcursionsSave_v1';
-const LANDING={deployTime:.5,travel:10,spring:24,damper:5.5,settleTime:.65,crashSpeed:8.5};
+const LANDING={deployTime:2,travel:10,spring:24,damper:5.5,settleTime:.65,crashSpeed:8.5};
 
 const MISSIONS=[
  {id:'lunar',name:'Lunar Shuttle Run',fare:500,gravity:9.81,padWidth:150,roughness:1,wind:0,drag:0,startVx:18,startFuel:1,description:'A calm training run to the illuminated lunar pad.',unlockAt:0,
