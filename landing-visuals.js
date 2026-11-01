@@ -19,6 +19,16 @@
   const id=selectedMission&&selectedMission.id;
   return themes[id]||themes.lunar;
  }
+ function windDirection(m,phase){
+  if(!m||!m.wind)return 1;
+  if(m.id==='titan')return Math.sin(phase*.018)>=0?1:-1;
+  return Math.sin(phase*.05)>=0?1:-1;
+ }
+ function windStrength(m,phase){
+  if(!m||!m.wind)return 0;
+  const wind=Math.sin(phase*.7)*m.wind*.08;
+  return Math.min(1,Math.abs(wind)/(m.wind*.08));
+ }
  function seeded(x){
   const v=Math.sin(x*.017)*43758.5453;
   return v-Math.floor(v);
@@ -118,9 +128,9 @@
  };
  drawWindsock=function(m){
   if(m.wind<=0)return;
-  const now=clock(),wind=Math.sin(windPhase*.7)*m.wind*.08;
-  const strength=Math.min(1,Math.abs(wind)/(m.wind*.08));
-  const direction=wind>=0?1:-1;
+  const now=clock();
+  const strength=windStrength(m,windPhase);
+  const direction=windDirection(m,windPhase);
   const x=Math.max(82,terrain.pad.x-92);
   const ground=terrainYAt(x),roof=ground-96;
   ctx.save();
@@ -169,12 +179,11 @@
  const windParticles=[];
  function updateWindParticles(dt,T){
   const m=selectedMission||{wind:0};
-  const wind=Math.sin(windPhase*.7)*m.wind*.08;
-  const strength=Math.min(1,Math.abs(wind)/(m.wind*.08||1));
-  const direction=wind>=0?1:-1;
-  const desired=Math.round(18+strength*70);
+  const strength=windStrength(m,windPhase);
+  const direction=windDirection(m,windPhase);
+  const desired=Math.round(120+strength*260);
   while(windParticles.length<desired){
-   windParticles.push({x:Math.random()*W,y:Math.random()*H*.92,s:4+Math.random()*13,a:.08+Math.random()*.25,r:.7+Math.random()*1.8,ph:Math.random()*7});
+   windParticles.push({x:Math.random()*W,y:Math.random()*H*.92,s:4+Math.random()*13,a:.07+Math.random()*.22,r:.6+Math.random()*1.7,ph:Math.random()*7});
   }
   while(windParticles.length>desired)windParticles.pop();
   const speed=24+strength*190;
