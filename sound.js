@@ -8,6 +8,27 @@ const FlightSound=(()=>{
  const label=document.createElement('label');label.textContent='Volume ';
  const slider=document.createElement('input');slider.type='range';slider.min='0';slider.max='100';slider.value='35';slider.setAttribute('aria-label','Sound volume');slider.style.width='90px';
  label.append(slider);panel.append(button,label);document.body.append(panel);
+ const musicVolume=.16;
+ const musicTracks={
+  menu:new Audio('asset/Orbital Excursion Menu.wav'),
+  lunar:new Audio('asset/Moon.wav'),
+  mars:new Audio('asset/Mars.wav'),
+  titan:new Audio('asset/Titan.wav'),
+  io:new Audio('asset/Io.wav')
+ };
+ let activeMusic=null;
+ for(const track of Object.values(musicTracks)){track.loop=true;track.volume=musicVolume;track.preload='auto';}
+ function musicKey(){
+  if(typeof state!=='undefined'&&state==='play'&&typeof selectedMission!=='undefined'&&selectedMission&&musicTracks[selectedMission.id])return selectedMission.id;
+  return 'menu';
+ }
+ function updateMusic(){
+  const key=musicKey(),track=musicTracks[key];
+  if(activeMusic===track)return;
+  if(activeMusic)activeMusic.pause();
+  activeMusic=track;
+  if(!muted&&!document.hidden){activeMusic.currentTime=0;activeMusic.play().catch(()=>{});}
+ }
  function noise(){
   const buffer=audio.createBuffer(1,audio.sampleRate*2,audio.sampleRate),data=buffer.getChannelData(0);
   for(let i=0;i<data.length;i++)data[i]=Math.random()*2-1;
@@ -36,7 +57,7 @@ const FlightSound=(()=>{
  }
  function unlock(){
   if(document.hidden||muted||failed)return;init();
-  if(audio)audio.resume().then(()=>{ready=audio.state==='running';if(master)master.gain.setTargetAtTime(muted?0:volume,audio.currentTime,.01);}).catch(()=>{ready=false;});
+  if(audio)audio.resume().then(()=>{ready=audio.state==='running';if(master)master.gain.setTargetAtTime(muted?0:volume,audio.currentTime,.01);if(activeMusic&&!muted)activeMusic.play().catch(()=>{});}).catch(()=>{ready=false;});
  }
  function silence(){
   ready=false;tail=0;
@@ -177,11 +198,11 @@ const FlightSound=(()=>{
   voices.add(clunk);clunk.onended=()=>{voices.delete(clunk);clunk.disconnect();clunkGain.disconnect();};
   clunk.start(clunkTime);clunk.stop(clunkTime+.13);
  }
- button.addEventListener('click',()=>{muted=!muted;button.textContent=muted?'SOUND: OFF':'SOUND: ON';button.setAttribute('aria-pressed',String(muted));if(muted)silence();else unlock();});
+ button.addEventListener('click',()=>{muted=!muted;button.textContent=muted?'SOUND: OFF':'SOUND: ON';button.setAttribute('aria-pressed',String(muted));if(muted){silence();if(activeMusic)activeMusic.pause();}else{unlock();if(activeMusic)activeMusic.play().catch(()=>{});}});
  slider.addEventListener('input',()=>{volume=Number(slider.value)/100;unlock();});
  addEventListener('pointerdown',unlock);
  addEventListener('keydown',event=>{if(!event.repeat)unlock();});
- document.addEventListener('visibilitychange',()=>{if(document.hidden){silence();if(audio&&!failed)audio.suspend().catch(()=>{});}});
+ document.addEventListener('visibilitychange',()=>{if(document.hidden){silence();if(audio&&!failed)audio.suspend().catch(()=>{});if(activeMusic)activeMusic.pause();}else if(activeMusic&&!muted)activeMusic.play().catch(()=>{});});
  addEventListener('blur',silence);addEventListener('pagehide',silence);
  document.addEventListener('click',event=>{
   const target=event.target instanceof Element?event.target.closest('button'):null;
@@ -191,6 +212,11 @@ const FlightSound=(()=>{
   if(action.includes('repairHull')||action.includes('borrowEmergencyRepair')){repair();return;}
   uiClick();
  });
+ const originalStartMission=startMission;
+ startMission=function(mission){
+  originalStartMission(mission);
+  if(ship&&ship.fuelMax)ship.fuel=Math.min(ship.fuelMax,ship.fuel+ship.fuelMax*.25);
+ };
  const originalUpdate=update;
  update=function(dt){
   const current=ship,playing=state==='play'&&current&&dt>0;
@@ -198,6 +224,7 @@ const FlightSound=(()=>{
   const before=playing?current.gear.progress:0;
   const target=playing?current.gear.target:0;
   originalUpdate(dt);
+  updateMusic();
   if(!playing||ship!==current)return;
   const after=current.gear.progress;
   if(target===1&&before<.999&&after>=.999)gearLock(1.2,true);

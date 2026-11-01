@@ -1,5 +1,5 @@
 const FuelEconomy=(()=>{
- const price=2;
+ const price=15;
  const nonnegative=(v,fallback=0)=>Number.isFinite(v)?Math.max(0,v):fallback;
  const cents=v=>Math.round(v*100)/100;
  const money=v=>v.toFixed(2);
@@ -47,6 +47,8 @@ const FuelEconomy=(()=>{
  }
  function panel(s){
   const cap=capacity(s);
+  const emergencyUnits=Math.min(100,Math.max(0,cap-s.fuel));
+  const emergencyCost=cents(emergencyUnits*price);
   const buttons=[10,25,'fill'].map(request=>{
    const q=quote(s,request),label=request==='fill'?'Fill tank (affordable)':`Buy up to ${request} units`;
    const arg=request==='fill'?"'fill'":request;
@@ -60,16 +62,16 @@ const FuelEconomy=(()=>{
    ${s.fuel<=1e-6?'<p class="warn">Tank empty — refuel before launching.</p>':''}
   </div><div class="upgrade"><h3>Emergency refuelling &amp; debt</h3>
    <p>Outstanding debt: <span class="${s.debt>0?'warn':'good'}">${money(s.debt)} cr</span></p>
-   <p class="small">No interest. Successful mission earnings repay debt first. An emergency loan supplies 100 fuel units directly, adds 200 cr to debt, and gives no spendable credits.</p>
-   <button type="button" ${canBorrow(s)?'':'disabled'} onclick="borrowEmergencyFuel()">Emergency refuel — borrow 200 cr</button>
-   <p class="small">Available only with an empty tank and less than 2 cr. Further emergency loans remain available if stranded again.</p>
+   <p class="small">No interest. Successful mission earnings repay debt first. An emergency loan supplies up to 100 fuel units directly, adds ${money(emergencyCost)} cr to debt, and gives no spendable credits.</p>
+   <button type="button" ${canBorrow(s)?'':'disabled'} onclick="borrowEmergencyFuel()">Emergency refuel — borrow ${money(emergencyCost)} cr</button>
+   <p class="small">Available only with an empty tank and less than ${price} cr. Further emergency loans remain available if stranded again.</p>
   </div>`;
  }
  return {price,fresh,migrate,capacity,quote,purchase,canBorrow,borrow,settle,panel,money};
 })();
 
 const RepairShop=(()=>{
- const price=3,epsilon=1e-6;
+ const price=22.5,epsilon=1e-6;
  const capacity=s=>100+15*s.upgrades.hull;
  const money=v=>v.toFixed(2);
  function quote(s,request){
