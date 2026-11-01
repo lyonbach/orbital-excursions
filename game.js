@@ -116,17 +116,17 @@ function applyLandingDamage(s,amount){
  s.happiness=Math.max(0,s.happiness-damage*1.5);
 }
 function spawnDust(x,y,speed,side){
- const count=Math.min(14,4+Math.floor(speed*1.5));
+ const count=Math.min(26,8+Math.floor(speed*2.5));
  for(let i=0;i<count;i++){
-  if(dustParticles.length>=120)dustParticles.shift();
+  if(dustParticles.length>=220)dustParticles.shift();
   dustParticles.push({
-   x:x+(Math.random()-.5)*6,
+   x:x+(Math.random()-.5)*8,
    y:y-1,
-   vx:side*(.4+Math.random()*1.6)+(Math.random()-.5)*1.2,
-   vy:-(.4+Math.random()*1.4)*Math.min(2.2,.5+speed*.16),
-   life:.45+Math.random()*.45,
+   vx:side*(.7+Math.random()*2.4)+(Math.random()-.5)*1.8,
+   vy:-(.6+Math.random()*2)*Math.min(3,.6+speed*.22),
+   life:.7+Math.random()*.7,
    age:0,
-   size:1+Math.random()*2.2
+   size:1.5+Math.random()*3.5
   });
  }
 }
@@ -135,15 +135,15 @@ function updateDust(dt){
   p.age+=dt;
   p.x+=p.vx*SCALE*dt;
   p.y+=p.vy*SCALE*dt;
-  p.vy+=2.2*dt;
-  p.vx*=Math.exp(-1.8*dt);
+  p.vy+=2.4*dt;
+  p.vx*=Math.exp(-1.5*dt);
  }
  dustParticles=dustParticles.filter(p=>p.age<p.life);
 }
 function drawDust(){
  for(const p of dustParticles){
-  ctx.globalAlpha=Math.max(0,1-p.age/p.life)*.5;
-  ctx.fillStyle='#8fa3c7';
+  ctx.globalAlpha=Math.max(0,1-p.age/p.life)*.8;
+  ctx.fillStyle='#c3d2e8';
   ctx.beginPath();
   ctx.arc(p.x,p.y,p.size,0,7);
   ctx.fill();
@@ -437,26 +437,37 @@ function drawLandingGear(s){
  }
 }
 
+function drawLandingLights(s){
+ const altitude=clearanceAt(s).gap/SCALE;
+ const fade=Math.max(0,1-altitude/35);
+ if(fade<=.01)return;
+ const intensity=fade*fade;
+ for(const lx of [-6,6]){
+  const lamp=worldPoint(s,lx,10);
+  const groundY=terrainYAt(lamp.x);
+  const distance=Math.max(0,groundY-lamp.y);
+  const length=Math.min(280,distance);
+  if(distance<8)continue;
+  const endY=lamp.y+distance;
+  const gradient=ctx.createLinearGradient(lamp.x,lamp.y,lamp.x,endY);
+  gradient.addColorStop(0,`rgba(255,255,255,${.22*fade})`);
+  gradient.addColorStop(1,'rgba(255,255,255,0)');
+  ctx.fillStyle=gradient;
+  ctx.beginPath();
+  ctx.moveTo(lamp.x-2,lamp.y);
+  ctx.lineTo(lamp.x+2,lamp.y);
+  ctx.lineTo(lamp.x+7+18*fade,endY);
+  ctx.lineTo(lamp.x-7-18*fade,endY);
+  ctx.closePath();
+  ctx.fill();
+ }
+}
+
 function drawShip(){
  const s=ship;
- const landingLightsOn=state==='play'&&clearanceAt(s).gap/SCALE<=35;
  ctx.save();ctx.translate(s.x,s.y);ctx.rotate(s.angle);
  ThrusterPhysics.draw(ctx,s.jets||[]);
  drawLandingGear(s);
- if(landingLightsOn){
-  ctx.globalAlpha=.09;
-  ctx.fillStyle='#ffffff';
-  for(const x of [-6,6]){
-   ctx.beginPath();
-   ctx.moveTo(x-2,10);
-   ctx.lineTo(x+2,10);
-   ctx.lineTo(x+16,95);
-   ctx.lineTo(x-16,95);
-   ctx.closePath();
-   ctx.fill();
-  }
-  ctx.globalAlpha=1;
- }
  ctx.fillStyle='#dfe7ff';ctx.beginPath();ctx.moveTo(0,-20);ctx.quadraticCurveTo(16,-4,14,12);ctx.lineTo(-14,12);ctx.quadraticCurveTo(-16,-4,0,-20);ctx.fill();
  ctx.fillStyle='#7fa8ff';ctx.fillRect(-7,-8,14,7);
  const strobePhase=Math.floor(t*2.5)%2;
@@ -466,14 +477,9 @@ function drawShip(){
  ctx.fillStyle='#4ade80';ctx.beginPath();ctx.arc(15,-3,2.2,0,7);ctx.fill();
  ctx.globalAlpha=Math.floor(t*1.5)%3===0?1:.1;
  ctx.fillStyle='#ffffff';ctx.beginPath();ctx.arc(0,-20,1.8,0,7);ctx.fill();
- if(landingLightsOn){
-  ctx.globalAlpha=.9;
-  ctx.fillStyle='#ffffff';
-  ctx.beginPath();ctx.arc(-6,10,1.6,0,7);ctx.fill();
-  ctx.beginPath();ctx.arc(6,10,1.6,0,7);ctx.fill();
- }
  ctx.globalAlpha=1;
  ctx.restore();
+ drawLandingLights(s);
 }
 
 function showScreen(html){
