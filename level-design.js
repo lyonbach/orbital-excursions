@@ -10,6 +10,27 @@ const LevelDesign=(()=>{
   {...moon,id:'lunar-crater',name:'Crater Approach',fare:700,padWidth:125,startVx:18,requires:'lunar',description:'Brake above the crater rim, then descend into the basin. Keep clear of the raised edges.',layout:{padAt:.65,padY:.87,startX:.12,startY:.16,profile:[[0,.85],[.3,.83],[.5,.67],[.96,.69],[1,.8]]}},
   {...moon,id:'lunar-ridge',name:'Ridge Terminal',fare:950,padWidth:100,startVx:20,requires:'lunar-crater',description:'A narrow elevated terminal. Remove sideways drift before committing to the final descent.',layout:{padAt:.7,padY:.67,startX:.12,startY:.14,profile:[[0,.9],[.3,.88],[.5,.91],[1,.9]]}}
  );
+ const jupiter=MISSIONS.find(m=>m.id==='io');
+ const jupiterMission={
+  id:'jupiter-float',
+  name:'Cloud Station Approach',
+  fare:1150,
+  gravity:8.2,
+  padWidth:105,
+  roughness:1,
+  wind:8,
+  drag:.11,
+  startVx:24,
+  startFuel:.85,
+  unlockAt:4,
+  destination:'jupiter',
+  platform:{x:.58,y:.72,width:105,sway:{x:10,y:14,speed:.35}},
+  description:'Ride the cloud deck through high winds, then settle onto the station’s slowly floating platform.',
+  environment:{title:'Jupiter',body:'Fifth planet from the Sun',diameter:'139,820 km',gravity:'24.79 m/s² (2.53 times Earth)',atmosphere:'Mostly hydrogen and helium, with ammonia clouds and powerful storms.',temperature:'About -145 °C at the cloud tops.',hazards:'Extreme winds, radiation belts, violent storms, and no solid surface.',source:'Jupiter',url:'https://en.wikipedia.org/wiki/Jupiter'}
+ };
+ MISSIONS.push(jupiterMission);
+ roots.push(jupiterMission);
+ destinations.push({id:'jupiter',name:'Jupiter',intro:'jupiter-float',previous:'io',environment:jupiterMission.environment,gravity:jupiterMission.gravity,drag:jupiterMission.drag,wind:jupiterMission.wind});
  const done=id=>save.completed.includes(id);
  function destinationOpen(d){return !d.previous||done(d.previous)||MISSIONS.some(m=>m.destination===d.id&&done(m.id));}
  function missionOpen(m){const d=destinations.find(d=>d.id===m.destination);return !!d&&destinationOpen(d)&&(!m.requires||done(m.requires)||done(m.id));}
@@ -30,7 +51,7 @@ const LevelDesign=(()=>{
    const open=missionOpen(m),operable=save.hull>1e-6,fueled=save.fuel>1e-6;
    const label=!open?'LOCKED':!operable?'REPAIR IN HANGAR':!fueled?'REFUEL IN HANGAR':'LAUNCH';
    const prerequisite=m.requires?MISSIONS.find(v=>v.id===m.requires):null;
-   return `<div class="mission"><h3>${m.name}${done(m.id)?' — COMPLETED':''}</h3><p>${m.description}</p><p class="small">Fare ${m.fare} cr · ${m.layout?'Handcrafted terrain':'Original approach'}</p>${!open&&prerequisite?`<p class="small">Complete ${prerequisite.name} to unlock.</p>`:''}<button type="button" ${open&&operable&&fueled?'':'disabled'} onclick="startMissionById('${m.id}')">${label}</button></div>`;
+   return `<div class="mission"><h3>${m.name}${done(m.id)?' — COMPLETED':''}</h3><p>${m.description}</p><p class="small">Fare ${m.fare} cr · ${m.layout?'Handcrafted terrain':m.platform?'Floating platform':'Original approach'}</p>${!open&&prerequisite?`<p class="small">Complete ${prerequisite.name} to unlock.</p>`:''}<button type="button" ${open&&operable&&fueled?'':'disabled'} onclick="startMissionById('${m.id}')">${label}</button></div>`;
   }).join('');
   showScreen(`<h1>${d.name.toUpperCase()} — MISSIONS</h1><p>${resources()}</p>${cards}<div class="row"><button type="button" onclick="showHangar()">HANGAR / SERVICE</button><button type="button" onclick="showMissions()">DESTINATIONS</button></div>`);
  }
@@ -49,10 +70,24 @@ const LevelDesign=(()=>{
  startMission=function(m){
   if(!m||!missionOpen(m)){showDestinations();return;}
   originalStart(m);
-  if(state!=='play'||!m.layout)return;
+  if(state!=='play')return;
+  if(m.platform){
+   MovingPlatform.current=MovingPlatform.create(m.platform);
+   MovingPlatform.apply(MovingPlatform.current);
+  }
+  if(!m.layout)return;
   ship.x=Math.max(24,Math.min(W-24,W*m.layout.startX));
   ship.y=Math.max(40,Math.min(H-80,H*m.layout.startY));
   approachState=ApproachWarnings.create(Math.max(0,clearanceAt(ship).gap/SCALE));
+ };
+ const originalUpdate=update;
+ update=function(dt){
+  const platform=MovingPlatform.current;
+  if(platform){
+   MovingPlatform.update(platform,dt);
+   MovingPlatform.apply(platform);
+  }
+  originalUpdate(dt);
  };
  showMissions=showDestinations;
  showTitle();
