@@ -599,6 +599,7 @@ function loop(now){
  if(state==='play')update(dt);
  if(state==='won'&&resultDelay>0){
   resultDelay-=dt;
+  updateDust(dt);
   if(resultDelay<=0)showResult(true);
  }
  if(ship&&(state==='play'||state==='won'||state==='over'))draw();
