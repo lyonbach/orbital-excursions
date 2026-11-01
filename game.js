@@ -8,6 +8,7 @@ const SAFE_VS=2.2, SAFE_HS=1.6, SAFE_G=3.5, HARD_G=6.5;
 const BASE_FARE=500, FUEL_BONUS_MAX=500, HAPPINESS_RATE=5;
 const TARGET_TIME=90, SPEED_BONUS_RATE=10, SPEED_BONUS_MAX=900;
 const SAVE_KEY='orbitalExcursionsSave_v1';
+const LANDING={deployTime:.5,travel:10,spring:24,damper:5.5,inertia:6,settleTime:.65,crashSpeed:8.5};
 
 const MISSIONS=[
  {id:'lunar',name:'Lunar Shuttle Run',fare:500,gravity:9.81,padWidth:150,roughness:1,wind:0,drag:0,startVx:18,startFuel:1,description:'A calm training run to the illuminated lunar pad.',unlockAt:0,
@@ -47,6 +48,7 @@ addEventListener('keydown',e=>{
  if(!e.repeat&&!e.ctrlKey&&!e.metaKey&&!e.altKey&&state==='play'){
   if(e.code==='KeyH'){e.preventDefault();showFlightInstruments=!showFlightInstruments;}
   if(e.code==='KeyT'){e.preventDefault();showTrajectory=!showTrajectory;}
+  if(e.code==='KeyG'){e.preventDefault();ship.gear.target=1-ship.gear.target;ship.settleTime=0;}
  }
  if(e.code==='Escape'&&(state==='missions'||state==='hangar'))showTitle();
 });
@@ -72,6 +74,81 @@ function enginePower(){return 26+3*save.upgrades.engine;}
 function rcsPower(){return 6+1.5*save.upgrades.rcs;}
 function hullResistance(){return 1-.08*save.upgrades.hull;}
 
+function createLandingGear(){
+ return {target:1,progress:1,legs:[{side:-1,compression:0,touching:false},{side:1,compression:0,touching:false}]};
+}
+function worldPoint(s,x,y){
+ const c=Math.cos(s.angle),sn=Math.sin(s.angle);
+ return {x:s.x+x*c-y*sn,y:s.y+x*sn+y*c};
+}
+function gearFoot(s,leg,compressed=true){
+ const p=s.gear.progress;
+ return worldPoint(s,leg.side*(11+8*p),8+20*p-(compressed?leg.compression:0));
+}
+function hullPoints(s){return [[-12,12],[12,12],[-14,0],[14,0],[0,-20]].map(([x,y])=>worldPoint(s,x,y));}
+function contactPoints(s,compressed=true){
+ const points=hullPoints(s);
+ if(s.gear.progress>=.999)points.push(...s.gear.legs.map(leg=>gearFoot(s,leg,compressed)));
+ return points;
+}
+function clearanceAt(s,compressed=true){
+ const points=contactPoints(s,compressed);
+ return points.reduce((best,p)=>{
+  const gap=terrainYAt(p.x)-p.y;
+  return gap<best.gap?{gap,x:p.x,y:p.y}:best;
+ },{gap:Infinity,x:s.x,y:s.y});
+}
+function applyLandingDamage(s,amount){
+ const damage=Math.max(0,amount)*hullResistance();
+ s.hull=Math.max(0,s.hull-damage);
+ s.crew=Math.max(0,s.crew-damage*.8);
+ s.happiness=Math.max(0,s.happiness-damage*1.5);
+}
+function integrateLandingMotion(s,dt,ax,ay){
+ const steps=Math.ceil(dt*120),h=dt/steps;
+ for(let i=0;i<steps&&!s.failureReason;i++){
+  let support=0,torque=0,contacts=0;
+  const down=s.gear.progress>=.999;
+  for(const leg of s.gear.legs){
+   const foot=gearFoot(s,leg,false),penetration=foot.y-terrainYAt(foot.x);
+   const touching=down&&penetration>0;
+   if(touching){
+    const rx=(foot.x-s.x)/SCALE,normalSpeed=s.vy+s.angVel*rx;
+    if(!leg.touching){
+     applyLandingDamage(s,(Math.max(0,normalSpeed-SAFE_VS-1.2)*8+Math.max(0,Math.abs(s.vx)-SAFE_HS)*5)/2);
+     const onPad=foot.x>terrain.pad.x&&foot.x<terrain.pad.x+terrain.pad.w;
+     if(normalSpeed>LANDING.crashSpeed||(!onPad&&normalSpeed>SAFE_VS*2.2))s.failureReason='The landing impact was too severe.';
+    }
+    const force=Math.max(0,LANDING.spring*penetration/SCALE+LANDING.damper*normalSpeed);
+    support+=force;torque-=rx*force/LANDING.inertia;contacts++;
+   }
+   leg.touching=touching;
+  }
+  if(s.failureReason)break;
+  s.vx+=ax*h;s.vy+=(ay-support)*h;
+  s.angVel+=torque*h;
+  if(contacts)s.vx*=Math.exp(-4*h);
+  s.x+=s.vx*SCALE*h;s.y+=s.vy*SCALE*h;s.angle+=s.angVel*h;
+  const c=Math.cos(s.angle);
+  for(const leg of s.gear.legs){
+   const foot=gearFoot(s,leg,false),penetration=Math.max(0,foot.y-terrainYAt(foot.x));
+   leg.compression=down?Math.min(LANDING.travel,penetration/Math.max(.2,c)):0;
+   if(down&&c>.25&&penetration>LANDING.travel*c){
+    applyLandingDamage(s,Math.max(0,s.vy-1.2)*12);
+    s.y-=penetration-LANDING.travel*c;s.vy=Math.min(0,s.vy);s.angVel*=.6;
+   }
+  }
+  const hull=hullPoints(s);
+  const penetration=Math.max(...hull.map(p=>p.y-terrainYAt(p.x)));
+  if(penetration>=0){
+   applyLandingDamage(s,15+Math.max(0,s.vy)*8+Math.abs(s.vx)*5);
+   s.y-=penetration+.01;s.vy=Math.min(0,s.vy);
+   s.failureReason=down?'The hull struck the terrain.':'Hull strike: landing gear was not fully deployed.';
+  }
+  if(s.hull<=0||s.crew<=0)s.failureReason='The landing impact was too severe.';
+ }
+}
+
 function showEnvironment(m){
  const e=m.environment;
  envEl.innerHTML=`
@@ -94,7 +171,7 @@ function startMission(m){
  terrain=makeTerrain(m);
  stars=Array.from({length:170},()=>({x:Math.random()*W,y:Math.random()*H*.72,r:Math.random()*1.5+.3,a:Math.random()*.7+.2}));
  const fuelMax=maxFuel();
- ship={x:120,y:120,vx:m.startVx,vy:0,angle:0,angVel:0,fuel:fuelMax*m.startFuel,fuelMax,hull:maxHull(),hullMax:maxHull(),crew:100,happiness:100,thrusting:false,rcsL:false,rcsR:false,gVert:0,gLat:0,prevVx:0,prevVy:0,peakG:0};
+ ship={x:120,y:120,vx:m.startVx,vy:0,angle:0,angVel:0,fuel:fuelMax*m.startFuel,fuelMax,hull:maxHull(),hullMax:maxHull(),crew:100,happiness:100,thrusting:false,rcsL:false,rcsR:false,gVert:0,gLat:0,prevVx:0,prevVy:0,peakG:0,gear:createLandingGear(),settleTime:0,failureReason:''};
  missionTime=0;result=null;windPhase=0;shipAccel={x:0,y:0};
  state='play';
  screenEl.style.display='none';
@@ -112,13 +189,15 @@ function terrainYAt(x){
 }
 
 function update(dt){
+ if(dt<=0)return;
  t+=dt;missionTime+=dt;windPhase+=dt;
  const s=ship,m=selectedMission;
  s.prevVx=s.vx;s.prevVy=s.vy;
+ s.gear.progress+=Math.max(-dt/LANDING.deployTime,Math.min(dt/LANDING.deployTime,s.gear.target-s.gear.progress));
 
  if(keys.KeyQ)s.angVel-=2.4*dt;
  if(keys.KeyE)s.angVel+=2.4*dt;
- s.angVel*=.94;s.angle+=s.angVel*dt;
+ s.angVel*=.94;
 
  s.thrusting=(keys.KeyW||keys.ArrowUp)&&s.fuel>0;
  s.rcsL=(keys.KeyA||keys.ArrowLeft)&&s.fuel>0;
@@ -136,14 +215,10 @@ function update(dt){
  if(s.rcsR){ax+=rcsPower();s.fuel=Math.max(0,s.fuel-1.8*dt);}
 
  const drag=m.drag||0;
- ax-=s.vx*drag;
- ay-=s.vy*drag;
- shipAccel={x:ax,y:ay};
-
- s.vx+=ax*dt;s.vy+=ay*dt;
- s.x+=s.vx*SCALE*dt;s.y+=s.vy*SCALE*dt;
-
+ ax-=s.vx*drag;ay-=s.vy*drag;
+ integrateLandingMotion(s,dt,ax,ay);
  const dvx=(s.vx-s.prevVx)/dt,dvy=(s.vy-s.prevVy)/dt;
+ shipAccel={x:dvx,y:dvy};
  s.gLat=Math.abs(dvx)/G;s.gVert=Math.abs(dvy)/G;
  const totalG=Math.hypot(dvx,dvy)/G;
  s.peakG=Math.max(s.peakG,totalG);
@@ -161,24 +236,20 @@ function update(dt){
  if(s.x>W-20){s.x=W-20;s.vx=-Math.abs(s.vx)*.4;s.hull=Math.max(0,s.hull-2*hullResistance());s.happiness=Math.max(0,s.happiness-3);}
  if(s.y<20){s.y=20;s.vy=Math.max(s.vy,0);}
 
- const gy=terrainYAt(s.x);
- if(s.y+18>=gy){
-  s.y=gy-18;
-  const vs=Math.abs(s.vy),hs=Math.abs(s.vx);
-  const onPad=s.x>terrain.pad.x&&s.x<terrain.pad.x+terrain.pad.w;
-  const impact=(Math.max(0,vs-SAFE_VS)*8+Math.max(0,hs-SAFE_HS)*5)*hullResistance();
-  s.hull=Math.max(0,s.hull-impact);
-  s.crew=Math.max(0,s.crew-impact*.8);
-  s.happiness=Math.max(0,s.happiness-impact*1.5);
-  s.vx*=.15;s.vy=0;s.angVel*=.2;
-
-  if(s.hull<=0||s.crew<=0||(!onPad&&vs>SAFE_VS*2.2)){
-   state='over';result=calculatePayout(false);showResult(false);
-  }else if(onPad&&vs<=SAFE_VS&&hs<=SAFE_HS&&Math.abs(s.angle)<.35){
-   state='won';result=calculatePayout(true);
-   if(!save.completed.includes(m.id)){save.completed.push(m.id);}
-   save.credits+=result.money;persist();showResult(true);
-  }
+ if(s.failureReason||s.hull<=0||s.crew<=0){
+  state='over';result=calculatePayout(false);showResult(false);return;
+ }
+ const pad=terrain.pad;
+ const onPad=s.gear.progress>=.999&&s.gear.legs.every(leg=>{
+  const foot=gearFoot(s,leg);
+  return leg.touching&&foot.x>pad.x&&foot.x<pad.x+pad.w&&Math.abs(terrainYAt(foot.x)-pad.y)<1;
+ });
+ const stable=onPad&&!s.thrusting&&Math.abs(s.vy)<=SAFE_VS&&Math.abs(s.vx)<=SAFE_HS&&Math.abs(s.angle)<.35&&Math.abs(s.angVel)<.3;
+ s.settleTime=stable?s.settleTime+dt:0;
+ if(s.settleTime>=LANDING.settleTime){
+  state='won';result=calculatePayout(true);
+  if(!save.completed.includes(m.id))save.completed.push(m.id);
+  save.credits+=result.money;persist();showResult(true);
  }
 }
 
@@ -214,7 +285,7 @@ function draw(){
  drawShip();
  if(showFlightInstruments&&state==='play')drawShipReadouts();
  document.getElementById('time').textContent=missionTime.toFixed(1);
- document.getElementById('alt').textContent=Math.max(0,Math.round((terrainYAt(ship.x)-ship.y-18)/SCALE));
+ document.getElementById('alt').textContent=Math.max(0,Math.round(clearanceAt(ship).gap/SCALE));
  document.getElementById('fuelText').textContent=`${Math.round(ship.fuel)} / ${ship.fuelMax}`;
  document.getElementById('fuelFill').style.width=(ship.fuel/ship.fuelMax*100)+'%';
  document.getElementById('hullFill').style.width=(ship.hull/ship.hullMax*100)+'%';
@@ -223,16 +294,16 @@ function draw(){
 }
 
 function drawShipReadouts(){
- const s=ship,margin=10,bw=Math.min(180,Math.max(1,W-20)),bh=88;
+ const s=ship,margin=10,bw=Math.min(180,Math.max(1,W-20)),bh=108;
  const clamp=(v,lo,hi)=>Math.max(lo,Math.min(v,Math.max(lo,hi)));
  const obstacles=[document.querySelector('#hud .panel'),envEl].filter(el=>el&&!el.closest('.hidden')).map(el=>el.getBoundingClientRect());
  const candidates=[
-  {x:s.x+48,y:s.y-112},{x:s.x-48-bw,y:s.y-112},
+  {x:s.x+48,y:s.y-132},{x:s.x-48-bw,y:s.y-132},
   {x:s.x+48,y:s.y+34},{x:s.x-48-bw,y:s.y+34},
   {x:s.x-bw/2,y:s.y+48},{x:s.x-bw/2,y:s.y-48-bh}
  ].map(p=>({x:clamp(p.x,margin,W-bw-margin),y:clamp(p.y,margin,H-bh-margin)}));
  const overlap=(p,r)=>Math.max(0,Math.min(p.x+bw,r.right+6)-Math.max(p.x,r.left-6))*Math.max(0,Math.min(p.y+bh,r.bottom+6)-Math.max(p.y,r.top-6));
- const shipRect={left:s.x-25,right:s.x+25,top:s.y-25,bottom:s.y+25};
+ const shipRect={left:s.x-25,right:s.x+25,top:s.y-25,bottom:s.y+30};
  const score=p=>obstacles.reduce((sum,r)=>sum+overlap(p,r),0)+overlap(p,shipRect)*2;
  const box=candidates.reduce((best,p)=>score(p)<score(best)?p:best);
  const x=box.x,y=box.y,ex=clamp(s.x,x,x+bw),ey=clamp(s.y,y,y+bh);
@@ -243,11 +314,13 @@ function drawShipReadouts(){
  ctx.lineTo(ex-dx/len*12,ey-dy/len*12);ctx.lineTo(ex,ey);ctx.stroke();
  ctx.fillStyle='rgba(8,14,28,.82)';ctx.fillRect(x,y,bw,bh);ctx.strokeRect(x,y,bw,bh);
  ctx.font='11px ui-monospace,monospace';ctx.textBaseline='middle';
+ const gearStatus=Math.abs(s.gear.progress-s.gear.target)>.001?'MOVING':s.gear.progress>=.999?'DOWN':'UP';
  const rows=[
   ['SPEED',Math.hypot(s.vx,s.vy).toFixed(1)+' m/s','#dfe7ff'],
   ['VERT',s.vy.toFixed(1)+' m/s','#59c2ff'],
   ['HORIZ',s.vx.toFixed(1)+' m/s','#ffa657'],
-  ['G-LOAD',Math.hypot(s.gVert,s.gLat).toFixed(1)+' g','#7ee787']
+  ['G-LOAD',Math.hypot(s.gVert,s.gLat).toFixed(1)+' g','#7ee787'],
+  ['GEAR [G]',gearStatus,gearStatus==='DOWN'?'#7ee787':'#ffd166']
  ];
  rows.forEach(([label,value,color],i)=>{
   ctx.fillStyle=color;ctx.textAlign='left';ctx.fillText(label,x+10,y+14+i*20);
@@ -260,20 +333,22 @@ function drawTrajectory(){
  const dt=1/60,steps=480,m=selectedMission;
  let x=ship.x,y=ship.y,vx=ship.vx,vy=ship.vy,impact=null;
  const points=[{x,y}];
+ const projected=(px,py)=>({...ship,x:px,y:py});
  for(let i=1;i<=steps;i++){
   const oldX=x,oldY=y,drag=m.drag||0;
   const ax=(m.wind?Math.sin((windPhase+i*dt)*.7)*m.wind*.08:0)-vx*drag;
   const ay=m.gravity-vy*drag;
   vx+=ax*dt;vy+=ay*dt;x+=vx*SCALE*dt;y+=vy*SCALE*dt;
   if(x<20||x>W-20||y<20){points.push({x,y});break;}
-  if(y+18>=terrainYAt(x)){
+  if(clearanceAt(projected(x,y),false).gap<=0){
    let lo=0,hi=1;
    for(let j=0;j<10;j++){
     const f=(lo+hi)/2,px=oldX+(x-oldX)*f,py=oldY+(y-oldY)*f;
-    if(py+18>=terrainYAt(px))hi=f;else lo=f;
+    if(clearanceAt(projected(px,py),false).gap<=0)hi=f;else lo=f;
    }
    x=oldX+(x-oldX)*hi;y=oldY+(y-oldY)*hi;
-   points.push({x,y});impact={x,y:y+18};break;
+   points.push({x,y});const contact=clearanceAt(projected(x,y),false);
+   impact={x:contact.x,y:terrainYAt(contact.x)};break;
   }
   if(i%4===0)points.push({x,y});
  }
@@ -290,6 +365,23 @@ function drawTrajectory(){
  ctx.restore();
 }
 
+function drawLandingGear(s){
+ const p=s.gear.progress;
+ ctx.lineWidth=2;
+ for(const leg of s.gear.legs){
+  const x=leg.side*(11+8*p),y=8+20*p-leg.compression;
+  ctx.strokeStyle='#9fb4d8';ctx.beginPath();
+  ctx.moveTo(leg.side*9,8);ctx.lineTo(x,y);ctx.stroke();
+  ctx.strokeStyle=leg.touching?'#7ee787':'#dfe7ff';
+  ctx.beginPath();ctx.moveTo(x-5,y);ctx.lineTo(x+5,y);ctx.stroke();
+  if(p>.5){
+   ctx.strokeStyle='#59c2ff';ctx.lineWidth=3;ctx.beginPath();
+   ctx.moveTo(leg.side*9+(x-leg.side*9)*.35,8+(y-8)*.35);
+   ctx.lineTo(leg.side*9+(x-leg.side*9)*.7,8+(y-8)*.7);ctx.stroke();ctx.lineWidth=2;
+  }
+ }
+}
+
 function drawShip(){
  const s=ship;
  ctx.save();ctx.translate(s.x,s.y);ctx.rotate(s.angle);
@@ -298,9 +390,9 @@ function drawShip(){
   ctx.fillStyle='rgba(255,170,70,.9)';ctx.beginPath();ctx.moveTo(-6,16);ctx.lineTo(6,16);ctx.lineTo(0,16+f);ctx.closePath();ctx.fill();
   ctx.fillStyle='rgba(255,240,180,.9)';ctx.beginPath();ctx.moveTo(-3,16);ctx.lineTo(3,16);ctx.lineTo(0,16+f*.55);ctx.closePath();ctx.fill();
  }
+ drawLandingGear(s);
  ctx.fillStyle='#dfe7ff';ctx.beginPath();ctx.moveTo(0,-20);ctx.quadraticCurveTo(16,-4,14,12);ctx.lineTo(-14,12);ctx.quadraticCurveTo(-16,-4,0,-20);ctx.fill();
  ctx.fillStyle='#7fa8ff';ctx.fillRect(-7,-8,14,7);
- ctx.strokeStyle='#9fb4d8';ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(-9,11);ctx.lineTo(-15,19);ctx.moveTo(9,11);ctx.lineTo(15,19);ctx.stroke();
  if(s.rcsL&&s.fuel>0){ctx.fillStyle='rgba(120,220,255,.85)';ctx.fillRect(18,-2,8+Math.random()*6,3);}
  if(s.rcsR&&s.fuel>0){ctx.fillStyle='rgba(120,220,255,.85)';ctx.fillRect(-18,-2,-8-Math.random()*6,3);}
  ctx.restore();
@@ -328,7 +420,8 @@ function showTitle(){
   </div>
   <h2>Flight controls</h2>
   <p><kbd>W</kbd>/<kbd>&uarr;</kbd> main engine &nbsp; <kbd>A</kbd>/<kbd>D</kbd> RCS &nbsp; <kbd>Q</kbd>/<kbd>E</kbd> rotate</p>
-  <p><kbd>H</kbd> flight callout &nbsp; <kbd>T</kbd> coasting trajectory (engines off)</p>
+  <p><kbd>G</kbd> landing gear &nbsp; <kbd>H</kbd> flight callout &nbsp; <kbd>T</kbd> coasting trajectory (engines off)</p>
+  <p>Deploy both feet and let the suspension settle on the pad to complete a landing.</p>
   <p>Land gently on the pad, preserve fuel, protect passengers, and arrive quickly.</p>
  `);
 }
@@ -386,7 +479,7 @@ function showResult(success){
    <p><b>Total earned: ${result.money} credits</b></p><p>Peak G: ${ship.peakG.toFixed(1)} G</p>
    <div class="row"><button type="button" onclick="showMissions()">MISSIONS</button><button type="button" onclick="showHangar()">HANGAR</button><button type="button" onclick="startMissionById('${m.id}')">FLY AGAIN</button></div>`);
  }else{
-  showScreen(`<h1>MISSION FAILED</h1><p>${ship.hull<=0?'The shuttle was destroyed.':ship.crew<=0?'Passengers did not survive the flight.':'You missed the landing zone.'}</p><p>No payment was issued.</p><div class="row"><button type="button" onclick="startMissionById('${m.id}')">RETRY</button><button type="button" onclick="showMissions()">MISSIONS</button><button type="button" onclick="showHangar()">HANGAR</button></div>`);
+  showScreen(`<h1>MISSION FAILED</h1><p>${ship.hull<=0?'The shuttle was destroyed.':ship.crew<=0?'Passengers did not survive the flight.':ship.failureReason||'You missed the landing zone.'}</p><p>No payment was issued.</p><div class="row"><button type="button" onclick="startMissionById('${m.id}')">RETRY</button><button type="button" onclick="showMissions()">MISSIONS</button><button type="button" onclick="showHangar()">HANGAR</button></div>`);
  }
 }
 
@@ -399,6 +492,6 @@ function loop(now){
 
 terrain=makeTerrain(MISSIONS[0]);
 stars=Array.from({length:170},()=>({x:Math.random()*W,y:Math.random()*H*.72,r:Math.random()*1.5+.3,a:Math.random()*.7+.2}));
-ship={x:120,y:120,vx:0,vy:0,angle:0,angVel:0,fuel:100,fuelMax:100,hull:100,hullMax:100,crew:100,happiness:100,thrusting:false,rcsL:false,rcsR:false,gVert:0,gLat:0,prevVx:0,prevVy:0,peakG:0};
+ship={x:120,y:120,vx:0,vy:0,angle:0,angVel:0,fuel:100,fuelMax:100,hull:100,hullMax:100,crew:100,happiness:100,thrusting:false,rcsL:false,rcsR:false,gVert:0,gLat:0,prevVx:0,prevVy:0,peakG:0,gear:createLandingGear(),settleTime:0,failureReason:''};
 showTitle();
 requestAnimationFrame(loop);
