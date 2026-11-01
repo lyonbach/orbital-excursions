@@ -80,7 +80,8 @@
   lastVisualTime=now;
   if(ship!==previousShip){highGShake=0;previousShip=ship;}
   const gLoad=state==='play'?Math.hypot(ship.gVert,ship.gLat):0;
-  const target=8*Math.min(1,Math.max(0,(gLoad-SAFE_G)/(HARD_G-SAFE_G)));
+  const target=gLoad<=1.5?0:gLoad<=2.5?2*(gLoad-1.5):
+   gLoad<=3.5?2+2*(gLoad-2.5):4+4*Math.min(1,(gLoad-3.5)/3);
   const rate=target>highGShake?12:9;
   highGShake+=(target-highGShake)*(1-Math.exp(-rate*dt));
   const impactShake=cameraShake;
