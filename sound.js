@@ -21,10 +21,10 @@ const FlightSound=(()=>{
    master=audio.createGain();master.gain.value=0;
    const compressor=audio.createDynamicsCompressor();compressor.threshold.value=-18;compressor.ratio.value=6;master.connect(compressor);compressor.connect(audio.destination);
    engineGain=audio.createGain();engineGain.gain.value=0;engineGain.connect(master);
-   const exhaust=noise(),low=audio.createBiquadFilter();low.type='lowpass';low.frequency.value=650;low.Q.value=.65;exhaust.connect(low);low.connect(engineGain);exhaust.start();
+   const exhaust=noise(),low=audio.createBiquadFilter();low.type='lowpass';low.frequency.value=450;low.Q.value=.65;exhaust.connect(low);low.connect(engineGain);exhaust.start();
    rumbleGain=audio.createGain();rumbleGain.gain.value=0;rumbleGain.connect(master);
-   const rumble=audio.createOscillator();rumble.type='sine';rumble.frequency.value=48;rumble.connect(rumbleGain);rumble.start();
-   const whine=audio.createOscillator(),whineGain=audio.createGain();whine.type='triangle';whine.frequency.value=145;whineGain.gain.value=.06;whine.connect(whineGain);whineGain.connect(engineGain);whine.start();
+   const rumble=audio.createOscillator();rumble.type='sine';rumble.frequency.value=38;rumble.connect(rumbleGain);rumble.start();
+   const whine=audio.createOscillator(),whineGain=audio.createGain();whine.type='triangle';whine.frequency.value=110;whineGain.gain.value=.06;whine.connect(whineGain);whineGain.connect(engineGain);whine.start();
    rcsGain=audio.createGain();rcsGain.gain.value=0;rcsGain.connect(master);
    const gas=noise(),high=audio.createBiquadFilter();high.type='highpass';high.frequency.value=1800;gas.connect(high);high.connect(rcsGain);gas.start();
   }catch(error){failed=true;button.textContent='SOUND UNAVAILABLE';button.disabled=true;slider.disabled=true;if(audio)audio.close().catch(()=>{});}
