@@ -29,9 +29,14 @@ const FlightSound=(()=>{
    const gas=noise(),high=audio.createBiquadFilter();high.type='highpass';high.frequency.value=1800;gas.connect(high);high.connect(rcsGain);gas.start();
   }catch(error){failed=true;button.textContent='SOUND UNAVAILABLE';button.disabled=true;slider.disabled=true;if(audio)audio.close().catch(()=>{});}
  }
+ function canPlay(){
+  if(!audio||failed||muted||document.hidden||!document.hasFocus())return false;
+  if(audio.state==='suspended')audio.resume().catch(()=>{});
+  return true;
+ }
  function unlock(){
   if(document.hidden||muted||failed)return;init();
-  if(audio)audio.resume().then(()=>{ready=audio.state==='running';}).catch(()=>{ready=false;});
+  if(audio)audio.resume().then(()=>{ready=audio.state==='running';if(master)master.gain.setTargetAtTime(muted?0:volume,audio.currentTime,.01);}).catch(()=>{ready=false;});
  }
  function silence(){
   ready=false;tail=0;
@@ -40,7 +45,7 @@ const FlightSound=(()=>{
   for(const gain of [master,engineGain,rumbleGain,rcsGain]){gain.gain.cancelScheduledValues(audio.currentTime);gain.gain.setValueAtTime(0,audio.currentTime);}
  }
  function effect(impact=false,strength=1){
-  if(!audio||failed||!ready||muted||document.hidden||!document.hasFocus()||audio.state!=='running')return;
+  if(!canPlay())return;
   const now=audio.currentTime,duration=impact?.32:.22,level=impact?.12+.18*strength:.12*strength;
   tail=Math.max(tail,now+duration);
   const source=noise(),filter=audio.createBiquadFilter(),gain=audio.createGain();
@@ -65,7 +70,7 @@ const FlightSound=(()=>{
   source.start(time);source.stop(time+.04);
  }
  function gearStart(deploying=true){
-  if(!audio||failed||!ready||muted||document.hidden||!document.hasFocus()||audio.state!=='running')return;
+  if(!canPlay())return;
   const now=audio.currentTime,duration=1.7;
   tail=Math.max(tail,now+duration+.1);
   latchClick(now,deploying?1:.8,deploying?1:1.18);
@@ -92,7 +97,7 @@ const FlightSound=(()=>{
   texture.start(now+.09);texture.stop(now+duration+.01);
  }
  function gearLock(strength=1,deploying=true){
-  if(!audio||failed||!ready||muted||document.hidden||!document.hasFocus()||audio.state!=='running')return;
+  if(!canPlay())return;
   const now=audio.currentTime,s=Math.max(.4,Math.min(1.6,strength));
   tail=Math.max(tail,now+.16);
   const knock=audio.createOscillator(),knockGain=audio.createGain();
@@ -117,9 +122,9 @@ const FlightSound=(()=>{
   follow.start(followTime);follow.stop(followTime+.07);
  }
  function uiClick(){
-  if(!audio||failed||!ready||muted||document.hidden||!document.hasFocus()||audio.state!=='running')return;
+  if(!canPlay())return;
   const now=audio.currentTime;
-  tail=Math.max(tail,now+.06);
+  tail=Math.max(tail,now+.25);
   const source=noise(),filter=audio.createBiquadFilter(),gain=audio.createGain();
   source.loop=false;filter.type='bandpass';filter.frequency.setValueAtTime(1900,now);
   filter.frequency.exponentialRampToValueAtTime(950,now+.03);filter.Q.value=1.6;
@@ -129,9 +134,9 @@ const FlightSound=(()=>{
   source.start(now);source.stop(now+.05);
  }
  function fuelFill(){
-  if(!audio||failed||!ready||muted||document.hidden||!document.hasFocus()||audio.state!=='running')return;
+  if(!canPlay())return;
   const now=audio.currentTime;
-  tail=Math.max(tail,now+.72);
+  tail=Math.max(tail,now+.9);
   for(let i=0;i<6;i++){
    const time=now+i*.1;
    const pump=audio.createOscillator(),pumpGain=audio.createGain(),pumpFilter=audio.createBiquadFilter();
@@ -151,9 +156,9 @@ const FlightSound=(()=>{
   }
  }
  function repair(){
-  if(!audio||failed||!ready||muted||document.hidden||!document.hasFocus()||audio.state!=='running')return;
+  if(!canPlay())return;
   const now=audio.currentTime;
-  tail=Math.max(tail,now+.52);
+  tail=Math.max(tail,now+.7);
   for(let i=0;i<6;i++){
    const time=now+i*.055;
    const ratchet=noise(),filter=audio.createBiquadFilter(),gain=audio.createGain();
@@ -213,7 +218,7 @@ const FlightSound=(()=>{
  };
  function tick(){
   if(audio&&!failed){
-   const enabled=ready&&!muted&&!document.hidden&&document.hasFocus();
+   const enabled=!muted&&!document.hidden&&document.hasFocus();
    const active=enabled&&typeof state!=='undefined'&&state==='play'&&typeof ship!=='undefined'&&ship;
    let main=0,rcs=0;
    if(active)for(const jet of ship.jets||[]){if(Math.hypot(jet.fx,jet.fy)<=0)continue;const strength=Math.max(0,Math.min(1,jet.strength||0));if(jet.name==='main')main=Math.max(main,strength);else rcs=Math.max(rcs,strength);}
