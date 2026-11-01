@@ -9,6 +9,7 @@ const EnvironmentVisuals=(()=>{
  const key=()=>selectedMission.destination||selectedMission.id;
  const theme=()=>themes[key()]||themes.lunar;
  const windDust=[];
+ const vaporWake=[];
  function spawnWindDust(dt){
   const wind=selectedMission.wind||0,magnitude=Math.abs(wind);
   if(magnitude>=.12){
@@ -68,6 +69,35 @@ const EnvironmentVisuals=(()=>{
   for(const p of dustParticles){ctx.globalAlpha=Math.max(0,1-p.age/p.life)*.8;ctx.beginPath();ctx.arc(p.x,p.y,p.size,0,7);ctx.fill();}
   ctx.restore();
  };
+ function drawPlatformMotion(pad,platform){
+  if(!platform)return;
+  const speed=Math.min(1,Math.abs(platform.vx)/140);
+  const tilt=Math.max(-.05,Math.min(.05,platform.vx/900));
+  ctx.save();
+  ctx.translate(pad.x+pad.w/2,pad.y+4);
+  ctx.rotate(tilt);
+  ctx.fillStyle='#1d2c4a';
+  ctx.fillRect(-pad.w/2,-4,pad.w,8);
+  ctx.strokeStyle='#7fd1ff';
+  ctx.lineWidth=2;
+  ctx.strokeRect(-pad.w/2,-4,pad.w,8);
+  const pulse=.35+Math.abs(Math.sin(t*(2+speed*4)))*.65;
+  ctx.fillStyle=`rgba(255,140,66,${pulse})`;
+  ctx.fillRect(-pad.w/2,-7,7,3);
+  ctx.fillRect(pad.w/2-7,-4,7,3);
+  if(speed>.08){
+   const direction=platform.vx>=0?-1:1;
+   ctx.globalAlpha=.16+speed*.18;
+   ctx.fillStyle='#d9c3a0';
+   for(let i=0;i<4;i++){
+    const offset=direction*(18+i*16)*speed;
+    ctx.beginPath();
+    ctx.ellipse(offset,2+i,26-i*4,2.2-i*.3,0,0,7);
+    ctx.fill();
+   }
+  }
+  ctx.restore();
+ }
  draw=function(dt=1/60){
   ctx.clearRect(0,0,W,H);
   ctx.save();ctx.translate((Math.random()-.5)*cameraShake,(Math.random()-.5)*cameraShake);
@@ -78,8 +108,12 @@ const EnvironmentVisuals=(()=>{
   ctx.lineTo(W+100,H+10);ctx.closePath();
   ctx.fillStyle=colors.ground;ctx.fill();ctx.strokeStyle=colors.edge;ctx.lineWidth=2;ctx.stroke();
   const pad=terrain.pad;
-  ctx.fillStyle='#1d2c4a';ctx.fillRect(pad.x,pad.y,pad.w,8);
-  ctx.strokeStyle='#7fd1ff';ctx.lineWidth=2;ctx.strokeRect(pad.x,pad.y,pad.w,8);
+  if(key()==='jupiter'&&MovingPlatform.current){
+   drawPlatformMotion(pad,MovingPlatform.current);
+  }else{
+   ctx.fillStyle='#1d2c4a';ctx.fillRect(pad.x,pad.y,pad.w,8);
+   ctx.strokeStyle='#7fd1ff';ctx.lineWidth=2;ctx.strokeRect(pad.x,pad.y,pad.w,8);
+  }
   drawWindsock(selectedMission);
   spawnWindDust(dt);drawWindDust();drawDust();
   if(showTrajectory&&state==='play')drawTrajectory();
