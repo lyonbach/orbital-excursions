@@ -61,6 +61,9 @@ addEventListener('keyup',e=>keys[e.code]=false);
 
 let ship,terrain,stars,state='title',t=0,missionTime=0,lastT=performance.now(),result=null,selectedMission=MISSIONS[0],windPhase=0,shipAccel={x:0,y:0};
 let approachState=null;
+let dustParticles=[];
+let resultDelay=0;
+let cameraShake=0;
 const screenEl=document.getElementById('screen'),envEl=document.getElementById('env');
 const approachAlertEl=document.getElementById('approachAlerts');
 function flushFlightResources(){if(state==='play'&&ship){save.fuel=ship.fuel;save.hull=ship.hull;persist();resourceSaveElapsed=0;}}
@@ -114,6 +117,41 @@ function applyLandingDamage(s,amount){
  s.crew=Math.max(0,s.crew-damage*.8);
  s.happiness=Math.max(0,s.happiness-damage*1.5);
 }
+function spawnDust(x,y,speed,side){
+ const count=Math.min(26,8+Math.floor(speed*2.5));
+ for(let i=0;i<count;i++){
+  if(dustParticles.length>=220)dustParticles.shift();
+  dustParticles.push({
+   x:x+(Math.random()-.5)*8,
+   y:y-1,
+   vx:side*(.7+Math.random()*2.4)+(Math.random()-.5)*1.8,
+   vy:-(.6+Math.random()*2)*Math.min(3,.6+speed*.22),
+   life:.7+Math.random()*.7,
+   age:0,
+   size:1.5+Math.random()*3.5
+  });
+ }
+}
+function updateDust(dt){
+ for(const p of dustParticles){
+  p.age+=dt;
+  p.x+=p.vx*SCALE*dt;
+  p.y+=p.vy*SCALE*dt;
+  p.vy+=2.4*dt;
+  p.vx*=Math.exp(-1.5*dt);
+ }
+ dustParticles=dustParticles.filter(p=>p.age<p.life);
+}
+function drawDust(){
+ for(const p of dustParticles){
+  ctx.globalAlpha=Math.max(0,1-p.age/p.life)*.8;
+  ctx.fillStyle='#c3d2e8';
+  ctx.beginPath();
+  ctx.arc(p.x,p.y,p.size,0,7);
+  ctx.fill();
+ }
+ ctx.globalAlpha=1;
+}
 function integrateLandingMotion(s,dt,ax,ay){
  const steps=Math.ceil(dt*120),h=dt/steps;
  for(let i=0;i<steps&&!s.failureReason;i++){
@@ -126,6 +164,8 @@ function integrateLandingMotion(s,dt,ax,ay){
    if(touching){
     const rx=(foot.x-s.x)/SCALE,normalSpeed=s.vy+s.angVel*rx;
     if(!leg.touching){
+     spawnDust(foot.x,terrainYAt(foot.x),Math.abs(normalSpeed),leg.side);
+     cameraShake=Math.min(12,cameraShake+Math.max(0,normalSpeed)*.5);
      applyLandingDamage(s,(Math.max(0,normalSpeed-SAFE_VS-1.2)*8+Math.max(0,Math.abs(s.vx)-SAFE_HS)*5)/2);
      const onPad=foot.x>terrain.pad.x&&foot.x<terrain.pad.x+terrain.pad.w;
      if(normalSpeed>LANDING.crashSpeed||(!onPad&&normalSpeed>SAFE_VS*2.2))s.failureReason='The landing impact was too severe.';
@@ -187,6 +227,7 @@ function startMission(m){
  ship={x:120,y:120,vx:m.startVx,vy:0,angle:0,angVel:0,fuel:save.fuel,fuelMax,hull:save.hull,hullMax:maxHull(),crew:100,happiness:100,thrusting:false,rcsL:false,rcsR:false,gVert:0,gLat:0,prevVx:0,prevVy:0,peakG:0,gear:createLandingGear(),settleTime:0,failureReason:''};
  approachState=ApproachWarnings.create(Math.max(0,clearanceAt(ship).gap/SCALE));
  missionTime=0;result=null;windPhase=0;shipAccel={x:0,y:0};resourceSaveElapsed=0;
+ dustParticles=[];resultDelay=0;cameraShake=0;
  state='play';
  screenEl.style.display='none';
  screenEl.classList.add('hidden');
@@ -221,6 +262,7 @@ function update(dt){
  const drag=m.drag||0;
  ax-=s.vx*drag;ay-=s.vy*drag;
  integrateLandingMotion(s,dt,ax,ay);
+ updateDust(dt);
  const dvx=(s.vx-s.prevVx)/dt,dvy=(s.vy-s.prevVy)/dt;
  shipAccel={x:dvx,y:dvy};
  s.gLat=Math.abs(dvx)/G;s.gVert=Math.abs(dvy)/G;
@@ -258,7 +300,8 @@ function update(dt){
   if(!save.completed.includes(m.id))save.completed.push(m.id);
   const payment=FuelEconomy.settle(save,result.money);
   result.debtRepaid=payment.repaid;result.netMoney=payment.net;
-  persist();showResult(true);
+  persist();
+  resultDelay=3;
  }
 }
 
@@ -273,9 +316,13 @@ function calculatePayout(success){
 
 function draw(){
  ctx.clearRect(0,0,W,H);
+ const shakeX=(Math.random()-.5)*cameraShake;
+ const shakeY=(Math.random()-.5)*cameraShake;
+ ctx.save();
+ ctx.translate(shakeX,shakeY);
  const sky=ctx.createLinearGradient(0,0,0,H);
  sky.addColorStop(0,'#040718');sky.addColorStop(.65,'#0b1630');sky.addColorStop(1,'#16233d');
- ctx.fillStyle=sky;ctx.fillRect(0,0,W,H);
+ ctx.fillStyle=sky;ctx.fillRect(-20,-20,W+40,H+40);
  for(const st of stars){ctx.globalAlpha=st.a;ctx.fillStyle='#cfe3ff';ctx.beginPath();ctx.arc(st.x,st.y,st.r,0,7);ctx.fill();}
  ctx.globalAlpha=1;
  ctx.beginPath();ctx.moveTo(-100,H+10);
@@ -290,9 +337,12 @@ function draw(){
   ctx.fillStyle=`rgba(120,220,255,${.25+blink*.65})`;
   ctx.fillRect(p.x+8+i*((p.w-16)/4)-2,p.y-4,5,5);
  }
+ drawWindsock(selectedMission);
+ drawDust();
  if(showTrajectory&&state==='play')drawTrajectory();
  drawShip();
  if(showFlightInstruments&&state==='play')drawShipReadouts();
+ ctx.restore();
  ApproachWarnings.render(approachAlertEl,approachState,state==='play');
  const gearStatusEl=document.getElementById('gearStatus');
  const status=ApproachWarnings.gearStatus(ship.gear);
@@ -305,6 +355,42 @@ function draw(){
  document.getElementById('hullFill').style.width=(ship.hull/ship.hullMax*100)+'%';
  document.getElementById('crewFill').style.width=ship.crew+'%';
  document.getElementById('happyFill').style.width=ship.happiness+'%';
+}
+
+function drawWindsock(m){
+ if(m.wind<=0)return;
+ const wind=Math.sin(windPhase*.7)*m.wind*.08;
+ const maxWind=m.wind*.08;
+ const strength=Math.min(1,Math.abs(wind)/maxWind);
+ const direction=wind>=0?1:-1;
+ const poleX=terrain.pad.x-26;
+ const poleTop=terrain.pad.y-36;
+ ctx.strokeStyle='#9fb4d8';
+ ctx.lineWidth=2;
+ ctx.beginPath();
+ ctx.moveTo(poleX,terrain.pad.y);
+ ctx.lineTo(poleX,poleTop);
+ ctx.stroke();
+ const length=10+28*strength;
+ const flutter=Math.sin(t*7)*3*strength;
+ const tipX=poleX+direction*length;
+ const tipY=poleTop+flutter;
+ ctx.fillStyle='#ff8c42';
+ ctx.beginPath();
+ ctx.moveTo(poleX,poleTop-3.5);
+ ctx.lineTo(tipX,tipY-1.5);
+ ctx.lineTo(tipX,tipY+1.5);
+ ctx.lineTo(poleX,poleTop+3.5);
+ ctx.closePath();
+ ctx.fill();
+ ctx.fillStyle='#ffffff';
+ ctx.beginPath();
+ ctx.moveTo(poleX+direction*length*.45,poleTop-2.2+flutter*.45);
+ ctx.lineTo(poleX+direction*length*.65,tipY-1+flutter*.65);
+ ctx.lineTo(poleX+direction*length*.65,tipY+1+flutter*.65);
+ ctx.lineTo(poleX+direction*length*.45,poleTop+2.2+flutter*.45);
+ ctx.closePath();
+ ctx.fill();
 }
 
 function drawShipReadouts(){
@@ -397,6 +483,30 @@ function drawLandingGear(s){
  }
 }
 
+function drawLandingLights(s){
+ const altitude=clearanceAt(s).gap/SCALE;
+ const fade=Math.max(0,1-altitude/35);
+ if(fade<=.01)return;
+ for(const lx of [-6,6]){
+  const lamp=worldPoint(s,lx,10);
+  const groundY=terrainYAt(lamp.x);
+  const distance=Math.max(0,groundY-lamp.y);
+  if(distance<8)continue;
+  const endY=lamp.y+distance;
+  const gradient=ctx.createLinearGradient(lamp.x,lamp.y,lamp.x,endY);
+  gradient.addColorStop(0,`rgba(255,255,255,${.22*fade})`);
+  gradient.addColorStop(1,'rgba(255,255,255,0)');
+  ctx.fillStyle=gradient;
+  ctx.beginPath();
+  ctx.moveTo(lamp.x-2,lamp.y);
+  ctx.lineTo(lamp.x+2,lamp.y);
+  ctx.lineTo(lamp.x+7+18*fade,endY);
+  ctx.lineTo(lamp.x-7-18*fade,endY);
+  ctx.closePath();
+  ctx.fill();
+ }
+}
+
 function drawShip(){
  const s=ship;
  ctx.save();ctx.translate(s.x,s.y);ctx.rotate(s.angle);
@@ -404,7 +514,16 @@ function drawShip(){
  drawLandingGear(s);
  ctx.fillStyle='#dfe7ff';ctx.beginPath();ctx.moveTo(0,-20);ctx.quadraticCurveTo(16,-4,14,12);ctx.lineTo(-14,12);ctx.quadraticCurveTo(-16,-4,0,-20);ctx.fill();
  ctx.fillStyle='#7fa8ff';ctx.fillRect(-7,-8,14,7);
+ const strobePhase=Math.floor(t*2.5)%2;
+ ctx.globalAlpha=strobePhase===0?1:.22;
+ ctx.fillStyle='#ff5252';ctx.beginPath();ctx.arc(-15,-3,2.2,0,7);ctx.fill();
+ ctx.globalAlpha=strobePhase===1?1:.22;
+ ctx.fillStyle='#4ade80';ctx.beginPath();ctx.arc(15,-3,2.2,0,7);ctx.fill();
+ ctx.globalAlpha=Math.floor(t*1.5)%3===0?1:.1;
+ ctx.fillStyle='#ffffff';ctx.beginPath();ctx.arc(0,-20,1.8,0,7);ctx.fill();
+ ctx.globalAlpha=1;
  ctx.restore();
+ drawLandingLights(s);
 }
 
 function showScreen(html){
@@ -522,6 +641,12 @@ function showResult(success){
 function loop(now){
  const dt=Math.min(.033,(now-lastT)/1000);lastT=now;
  if(state==='play')update(dt);
+ if(state==='won'&&resultDelay>0){
+  resultDelay-=dt;
+  updateDust(dt);
+  if(resultDelay<=0)showResult(true);
+ }
+ cameraShake*=Math.exp(-5*dt);
  if(ship&&(state==='play'||state==='won'||state==='over'))draw();
  requestAnimationFrame(loop);
 }
