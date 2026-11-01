@@ -10,8 +10,8 @@ const LevelDesign=(()=>{
   {...moon,id:'lunar-crater',name:'Crater Approach',fare:700,padWidth:125,startVx:18,requires:'lunar',description:'Brake above the crater rim, then descend into the basin. Keep clear of the raised edges.',layout:{padAt:.65,padY:.87,startX:.12,startY:.16,profile:[[0,.85],[.3,.83],[.5,.67],[.96,.69],[1,.8]]}},
   {...moon,id:'lunar-ridge',name:'Ridge Terminal',fare:950,padWidth:100,startVx:20,requires:'lunar-crater',description:'A narrow elevated terminal. Remove sideways drift before committing to the final descent.',layout:{padAt:.7,padY:.67,startX:.12,startY:.14,profile:[[0,.9],[.3,.88],[.5,.91],[1,.9]]}}
  );
- const jupiter=MISSIONS.find(m=>m.id==='io');
- const jupiterMission={
+ const jupiterEnvironment={title:'Jupiter',body:'Fifth planet from the Sun',diameter:'139,820 km',gravity:'24.79 m/s² (2.53 times Earth)',atmosphere:'Mostly hydrogen and helium, with ammonia clouds and powerful storms.',temperature:'About -145 °C at the cloud tops.',hazards:'Extreme winds, radiation belts, violent storms, and no solid surface.',source:'Jupiter',url:'https://en.wikipedia.org/wiki/Jupiter'};
+ const jupiterFloat={
   id:'jupiter-float',
   name:'Cloud Station Approach',
   fare:1150,
@@ -26,11 +26,29 @@ const LevelDesign=(()=>{
   destination:'jupiter',
   platform:{x:.58,y:.72,width:105,sway:{x:10,y:14,speed:.35}},
   description:'Ride the cloud deck through high winds, then settle onto the station’s slowly floating platform.',
-  environment:{title:'Jupiter',body:'Fifth planet from the Sun',diameter:'139,820 km',gravity:'24.79 m/s² (2.53 times Earth)',atmosphere:'Mostly hydrogen and helium, with ammonia clouds and powerful storms.',temperature:'About -145 °C at the cloud tops.',hazards:'Extreme winds, radiation belts, violent storms, and no solid surface.',source:'Jupiter',url:'https://en.wikipedia.org/wiki/Jupiter'}
+  environment:jupiterEnvironment
  };
- MISSIONS.push(jupiterMission);
- roots.push(jupiterMission);
- destinations.push({id:'jupiter',name:'Jupiter',intro:'jupiter-float',previous:'io',environment:jupiterMission.environment,gravity:jupiterMission.gravity,drag:jupiterMission.drag,wind:jupiterMission.wind});
+ const jupiterDrift={
+  id:'jupiter-drift',
+  name:'Drifting Terminal',
+  fare:1450,
+  gravity:8.2,
+  padWidth:95,
+  roughness:1,
+  wind:12,
+  drag:.12,
+  startVx:28,
+  startFuel:.8,
+  unlockAt:5,
+  requires:'jupiter-float',
+  destination:'jupiter',
+  platform:{x:.35,y:.68,width:95,sway:{x:8,y:10,speed:.5},drift:{x:190,y:8,speed:.22}},
+  description:'Match the drifting terminal’s sideways motion before committing to a final descent.',
+  environment:jupiterEnvironment
+ };
+ MISSIONS.push(jupiterFloat,jupiterDrift);
+ roots.push(jupiterFloat);
+ destinations.push({id:'jupiter',name:'Jupiter',intro:'jupiter-float',previous:'io',environment:jupiterEnvironment,gravity:jupiterFloat.gravity,drag:jupiterFloat.drag,wind:jupiterFloat.wind});
  const done=id=>save.completed.includes(id);
  function destinationOpen(d){return !d.previous||done(d.previous)||MISSIONS.some(m=>m.destination===d.id&&done(m.id));}
  function missionOpen(m){const d=destinations.find(d=>d.id===m.destination);return !!d&&destinationOpen(d)&&(!m.requires||done(m.requires)||done(m.id));}
