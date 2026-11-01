@@ -92,6 +92,8 @@ const LevelDesign=(()=>{
   if(m.platform){
    MovingPlatform.current=MovingPlatform.create(m.platform);
    MovingPlatform.apply(MovingPlatform.current);
+  }else{
+   MovingPlatform.current=null;
   }
   if(!m.layout)return;
   ship.x=Math.max(24,Math.min(W-24,W*m.layout.startX));
