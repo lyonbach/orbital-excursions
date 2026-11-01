@@ -63,6 +63,7 @@ let ship,terrain,stars,state='title',t=0,missionTime=0,lastT=performance.now(),r
 let approachState=null;
 let dustParticles=[];
 let resultDelay=0;
+let cameraShake=0;
 const screenEl=document.getElementById('screen'),envEl=document.getElementById('env');
 const approachAlertEl=document.getElementById('approachAlerts');
 function flushFlightResources(){if(state==='play'&&ship){save.fuel=ship.fuel;save.hull=ship.hull;persist();resourceSaveElapsed=0;}}
@@ -164,6 +165,7 @@ function integrateLandingMotion(s,dt,ax,ay){
     const rx=(foot.x-s.x)/SCALE,normalSpeed=s.vy+s.angVel*rx;
     if(!leg.touching){
      spawnDust(foot.x,terrainYAt(foot.x),Math.abs(normalSpeed),leg.side);
+     cameraShake=Math.min(12,cameraShake+Math.max(0,normalSpeed)*.5);
      applyLandingDamage(s,(Math.max(0,normalSpeed-SAFE_VS-1.2)*8+Math.max(0,Math.abs(s.vx)-SAFE_HS)*5)/2);
      const onPad=foot.x>terrain.pad.x&&foot.x<terrain.pad.x+terrain.pad.w;
      if(normalSpeed>LANDING.crashSpeed||(!onPad&&normalSpeed>SAFE_VS*2.2))s.failureReason='The landing impact was too severe.';
@@ -225,7 +227,7 @@ function startMission(m){
  ship={x:120,y:120,vx:m.startVx,vy:0,angle:0,angVel:0,fuel:save.fuel,fuelMax,hull:save.hull,hullMax:maxHull(),crew:100,happiness:100,thrusting:false,rcsL:false,rcsR:false,gVert:0,gLat:0,prevVx:0,prevVy:0,peakG:0,gear:createLandingGear(),settleTime:0,failureReason:''};
  approachState=ApproachWarnings.create(Math.max(0,clearanceAt(ship).gap/SCALE));
  missionTime=0;result=null;windPhase=0;shipAccel={x:0,y:0};resourceSaveElapsed=0;
- dustParticles=[];resultDelay=0;
+ dustParticles=[];resultDelay=0;cameraShake=0;
  state='play';
  screenEl.style.display='none';
  screenEl.classList.add('hidden');
@@ -314,9 +316,13 @@ function calculatePayout(success){
 
 function draw(){
  ctx.clearRect(0,0,W,H);
+ const shakeX=(Math.random()-.5)*cameraShake;
+ const shakeY=(Math.random()-.5)*cameraShake;
+ ctx.save();
+ ctx.translate(shakeX,shakeY);
  const sky=ctx.createLinearGradient(0,0,0,H);
  sky.addColorStop(0,'#040718');sky.addColorStop(.65,'#0b1630');sky.addColorStop(1,'#16233d');
- ctx.fillStyle=sky;ctx.fillRect(0,0,W,H);
+ ctx.fillStyle=sky;ctx.fillRect(-20,-20,W+40,H+40);
  for(const st of stars){ctx.globalAlpha=st.a;ctx.fillStyle='#cfe3ff';ctx.beginPath();ctx.arc(st.x,st.y,st.r,0,7);ctx.fill();}
  ctx.globalAlpha=1;
  ctx.beginPath();ctx.moveTo(-100,H+10);
@@ -335,6 +341,7 @@ function draw(){
  if(showTrajectory&&state==='play')drawTrajectory();
  drawShip();
  if(showFlightInstruments&&state==='play')drawShipReadouts();
+ ctx.restore();
  ApproachWarnings.render(approachAlertEl,approachState,state==='play');
  const gearStatusEl=document.getElementById('gearStatus');
  const status=ApproachWarnings.gearStatus(ship.gear);
@@ -602,6 +609,7 @@ function loop(now){
   updateDust(dt);
   if(resultDelay<=0)showResult(true);
  }
+ cameraShake*=Math.exp(-5*dt);
  if(ship&&(state==='play'||state==='won'||state==='over'))draw();
  requestAnimationFrame(loop);
 }
