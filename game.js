@@ -8,7 +8,7 @@ const SAFE_VS=2.2, SAFE_HS=1.6, SAFE_G=3.5, HARD_G=6.5;
 const BASE_FARE=500, FUEL_BONUS_MAX=500, HAPPINESS_RATE=5;
 const TARGET_TIME=90, SPEED_BONUS_RATE=10, SPEED_BONUS_MAX=900;
 const SAVE_KEY='orbitalExcursionsSave_v1';
-const LANDING={deployTime:.5,travel:10,spring:24,damper:5.5,inertia:6,settleTime:.65,crashSpeed:8.5};
+const LANDING={deployTime:.5,travel:10,spring:24,damper:5.5,settleTime:.65,crashSpeed:8.5};
 
 const MISSIONS=[
  {id:'lunar',name:'Lunar Shuttle Run',fare:500,gravity:9.81,padWidth:150,roughness:1,wind:0,drag:0,startVx:18,startFuel:1,description:'A calm training run to the illuminated lunar pad.',unlockAt:0,
@@ -108,6 +108,7 @@ function integrateLandingMotion(s,dt,ax,ay){
  const steps=Math.ceil(dt*120),h=dt/steps;
  for(let i=0;i<steps&&!s.failureReason;i++){
   let support=0,torque=0,contacts=0;
+  const drive=ThrusterPhysics.wrench(s.jets||[],s.angle,SCALE);
   const down=s.gear.progress>=.999;
   for(const leg of s.gear.legs){
    const foot=gearFoot(s,leg,false),penetration=foot.y-terrainYAt(foot.x);
@@ -120,15 +121,16 @@ function integrateLandingMotion(s,dt,ax,ay){
      if(normalSpeed>LANDING.crashSpeed||(!onPad&&normalSpeed>SAFE_VS*2.2))s.failureReason='The landing impact was too severe.';
     }
     const force=Math.max(0,LANDING.spring*penetration/SCALE+LANDING.damper*normalSpeed);
-    support+=force;torque-=rx*force/LANDING.inertia;contacts++;
+    support+=force;torque-=rx*force/ThrusterPhysics.inertia;contacts++;
    }
    leg.touching=touching;
   }
   if(s.failureReason)break;
-  s.vx+=ax*h;s.vy+=(ay-support)*h;
-  s.angVel+=torque*h;
+  s.vx+=(ax+drive.ax)*h;s.vy+=(ay+drive.ay-support)*h;
+  s.angVel=(s.angVel+(torque+drive.alpha)*h)*ThrusterPhysics.damping(h);
   if(contacts)s.vx*=Math.exp(-4*h);
-  s.x+=s.vx*SCALE*h;s.y+=s.vy*SCALE*h;s.angle+=s.angVel*h;
+  s.x+=s.vx*SCALE*h;s.y+=s.vy*SCALE*h;
+  s.angle=ThrusterPhysics.normalizeAngle(s.angle+s.angVel*h);
   const c=Math.cos(s.angle);
   for(const leg of s.gear.legs){
    const foot=gearFoot(s,leg,false),penetration=Math.max(0,foot.y-terrainYAt(foot.x));
@@ -195,25 +197,15 @@ function update(dt){
  s.prevVx=s.vx;s.prevVy=s.vy;
  s.gear.progress+=Math.max(-dt/LANDING.deployTime,Math.min(dt/LANDING.deployTime,s.gear.target-s.gear.progress));
 
- if(keys.KeyQ)s.angVel-=2.4*dt;
- if(keys.KeyE)s.angVel+=2.4*dt;
- s.angVel*=.94;
-
- s.thrusting=(keys.KeyW||keys.ArrowUp)&&s.fuel>0;
- s.rcsL=(keys.KeyA||keys.ArrowLeft)&&s.fuel>0;
- s.rcsR=(keys.KeyD||keys.ArrowRight)&&s.fuel>0;
+ const commands=ThrusterPhysics.prepare(s,{
+  main:!!(keys.KeyW||keys.ArrowUp),left:!!(keys.KeyA||keys.ArrowLeft),
+  right:!!(keys.KeyD||keys.ArrowRight),ccw:!!keys.KeyQ,cw:!!keys.KeyE
+ },dt,enginePower()*(.55+.45*s.hull/s.hullMax),rcsPower());
+ s.jets=commands.jets;s.fuel=Math.max(0,s.fuel-commands.fuelUsed);
+ s.thrusting=commands.main;s.rcsL=commands.left;s.rcsR=commands.right;
 
  let ax=0,ay=m.gravity;
  if(m.wind){ax+=Math.sin(windPhase*.7)*m.wind*.08;}
- if(s.thrusting){
-  const power=enginePower()*(.55+.45*s.hull/s.hullMax);
-  ax+=Math.sin(s.angle)*power;
-  ay-=Math.cos(s.angle)*power;
-  s.fuel=Math.max(0,s.fuel-7.5*dt);
- }
- if(s.rcsL){ax-=rcsPower();s.fuel=Math.max(0,s.fuel-1.8*dt);}
- if(s.rcsR){ax+=rcsPower();s.fuel=Math.max(0,s.fuel-1.8*dt);}
-
  const drag=m.drag||0;
  ax-=s.vx*drag;ay-=s.vy*drag;
  integrateLandingMotion(s,dt,ax,ay);
@@ -385,16 +377,10 @@ function drawLandingGear(s){
 function drawShip(){
  const s=ship;
  ctx.save();ctx.translate(s.x,s.y);ctx.rotate(s.angle);
- if(s.thrusting&&s.fuel>0){
-  const f=18+Math.random()*14;
-  ctx.fillStyle='rgba(255,170,70,.9)';ctx.beginPath();ctx.moveTo(-6,16);ctx.lineTo(6,16);ctx.lineTo(0,16+f);ctx.closePath();ctx.fill();
-  ctx.fillStyle='rgba(255,240,180,.9)';ctx.beginPath();ctx.moveTo(-3,16);ctx.lineTo(3,16);ctx.lineTo(0,16+f*.55);ctx.closePath();ctx.fill();
- }
+ ThrusterPhysics.draw(ctx,s.jets||[]);
  drawLandingGear(s);
  ctx.fillStyle='#dfe7ff';ctx.beginPath();ctx.moveTo(0,-20);ctx.quadraticCurveTo(16,-4,14,12);ctx.lineTo(-14,12);ctx.quadraticCurveTo(-16,-4,0,-20);ctx.fill();
  ctx.fillStyle='#7fa8ff';ctx.fillRect(-7,-8,14,7);
- if(s.rcsL&&s.fuel>0){ctx.fillStyle='rgba(120,220,255,.85)';ctx.fillRect(18,-2,8+Math.random()*6,3);}
- if(s.rcsR&&s.fuel>0){ctx.fillStyle='rgba(120,220,255,.85)';ctx.fillRect(-18,-2,-8-Math.random()*6,3);}
  ctx.restore();
 }
 
