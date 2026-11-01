@@ -212,6 +212,11 @@ const FlightSound=(()=>{
   if(action.includes('repairHull')||action.includes('borrowEmergencyRepair')){repair();return;}
   uiClick();
  });
+ const originalStartMission=startMission;
+ startMission=function(mission){
+  originalStartMission(mission);
+  if(ship&&ship.fuelMax)ship.fuel=Math.min(ship.fuelMax,ship.fuel+ship.fuelMax*.25);
+ };
  const originalUpdate=update;
  update=function(dt){
   const current=ship,playing=state==='play'&&current&&dt>0;
