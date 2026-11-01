@@ -19,6 +19,9 @@
   const id=selectedMission&&selectedMission.id;
   return themes[id]||themes.lunar;
  }
+ function isJupiter(){
+  return selectedMission&&(selectedMission.destination==='jupiter'||selectedMission.id==='jupiter-high');
+ }
  function windDirection(m,phase){
   if(!m||!m.wind)return 1;
   if(m.id==='titan')return Math.sin(phase*.018)>=0?1:-1;
@@ -205,6 +208,10 @@
  draw=function(){
   const now=clock(),dt=Math.min(.1,Math.max(0,now-lastVisualTime));
   lastVisualTime=now;
+  if(isJupiter()&&window.EnvironmentVisuals&&EnvironmentVisuals.draw){
+   EnvironmentVisuals.draw(dt);
+   return;
+  }
   if(ship!==previousShip){highGShake=0;previousShip=ship;}
   const gLoad=state==='play'?Math.hypot(ship.gVert,ship.gLat):0;
   const target=gLoad<=1.5?0:gLoad<=2.5?.8*(gLoad-1.5):
