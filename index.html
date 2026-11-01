@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <title>Orbital Excursions</title>
 <link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="approach-warnings.css">
 </head>
 <body>
 <div id="wrap">
@@ -12,6 +13,7 @@
   <div class="panel">
     <div>TIME <span id="time">0.0</span> s</div>
     <div>ALTITUDE <span id="alt">0</span> m</div>
+    <div>GEAR <span id="gearStatus" class="warn">UP</span> <span class="small">[G]</span></div>
     <div>FUEL <span id="fuelText"></span></div><div class="bar"><div id="fuelFill" class="fill" style="width:100%"></div></div>
     <div>HULL</div><div class="bar"><div id="hullFill" class="fill" style="width:100%"></div></div>
     <div>PASSENGER HEALTH</div><div class="bar"><div id="crewFill" class="fill" style="width:100%"></div></div>
@@ -19,9 +21,12 @@
   </div>
 </div>
 <div id="env" class="hidden"></div>
+<div id="approachAlerts" class="approach-alert hidden" role="status" aria-live="polite"></div>
 <div id="screen"><div id="screenCard" class="card"></div></div>
 </div>
+<script src="fuel-economy.js"></script>
 <script src="thrusters.js"></script>
+<script src="approach-warnings.js"></script>
 <script src="game.js"></script>
 </body>
 </html>

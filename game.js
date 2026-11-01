@@ -8,7 +8,7 @@ const SAFE_VS=2.2, SAFE_HS=1.6, SAFE_G=3.5, HARD_G=6.5;
 const BASE_FARE=500, FUEL_BONUS_MAX=500, HAPPINESS_RATE=5;
 const TARGET_TIME=90, SPEED_BONUS_RATE=10, SPEED_BONUS_MAX=900;
 const SAVE_KEY='orbitalExcursionsSave_v1';
-const LANDING={deployTime:.5,travel:10,spring:24,damper:5.5,settleTime:.65,crashSpeed:8.5};
+const LANDING={deployTime:2,travel:10,spring:24,damper:5.5,settleTime:.65,crashSpeed:8.5};
 
 const MISSIONS=[
  {id:'lunar',name:'Lunar Shuttle Run',fare:500,gravity:9.81,padWidth:150,roughness:1,wind:0,drag:0,startVx:18,startFuel:1,description:'A calm training run to the illuminated lunar pad.',unlockAt:0,
@@ -23,20 +23,21 @@ const MISSIONS=[
 
 const UPGRADES={
  engine:{name:'Main Engine',levels:[0,400,900,1600],effect:l=>`Thrust ${26+3*l}`,desc:'Improves climb and braking authority.'},
- fuel:{name:'Fuel Capacity',levels:[0,350,800,1500],effect:l=>`${100+20*l} units`,desc:'Carry more propellant for long approaches.'},
- hull:{name:'Hull Plating',levels:[0,450,1000,1800],effect:l=>`${100+15*l} hull, ${Math.round(8*l)}% impact resistance`,desc:'Absorbs more landing and collision damage.'},
+ fuel:{name:'Fuel Capacity',levels:[0,350,800,1500],effect:l=>`${100+20*l} units`,desc:'Carry more propellant for long approaches. Extra capacity does not include fuel.'},
+ hull:{name:'Hull Plating',levels:[0,450,1000,1800],effect:l=>`${100+15*l} hull, ${Math.round(8*l)}% impact resistance`,desc:'Absorbs more landing and collision damage. Extra capacity does not repair existing hull points.'},
  rcs:{name:'RCS Thrusters',levels:[0,300,700,1300],effect:l=>`Lateral thrust ${6+1.5*l}`,desc:'Improves sideways correction without rotating.'}
 };
 
-let save=loadSave();
+let save=loadSave(),resourceSaveElapsed=0;
 function loadSave(){
  try{
   const raw=localStorage.getItem(SAVE_KEY);
-  if(raw){const s=JSON.parse(raw);return {credits:s.credits||0,upgrades:Object.assign({engine:0,fuel:0,hull:0,rcs:0},s.upgrades||{}),completed:s.completed||[]};}
+  if(raw)return FuelEconomy.migrate(JSON.parse(raw));
  }catch(e){}
- return {credits:0,upgrades:{engine:0,fuel:0,hull:0,rcs:0},completed:[]};
+ return FuelEconomy.fresh();
 }
 function persist(){localStorage.setItem(SAVE_KEY,JSON.stringify(save));}
+persist();
 
 const keys={};
 let showFlightInstruments=true,showTrajectory=true;
@@ -55,7 +56,12 @@ addEventListener('keydown',e=>{
 addEventListener('keyup',e=>keys[e.code]=false);
 
 let ship,terrain,stars,state='title',t=0,missionTime=0,lastT=performance.now(),result=null,selectedMission=MISSIONS[0],windPhase=0,shipAccel={x:0,y:0};
+let approachState=null;
 const screenEl=document.getElementById('screen'),envEl=document.getElementById('env');
+const approachAlertEl=document.getElementById('approachAlerts');
+function flushFlightResources(){if(state==='play'&&ship){save.fuel=ship.fuel;save.hull=ship.hull;persist();resourceSaveElapsed=0;}}
+addEventListener('pagehide',flushFlightResources);
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden')flushFlightResources();});
 
 function makeTerrain(m){
  const pts=[]; let x=-200;
@@ -68,14 +74,14 @@ function makeTerrain(m){
  return {pts,pad:{x:px,w:pw,y:py}};
 }
 
-function maxFuel(){return 100+20*save.upgrades.fuel;}
-function maxHull(){return 100+15*save.upgrades.hull;}
+function maxFuel(){return FuelEconomy.capacity(save);}
+function maxHull(){return RepairShop.capacity(save);}
 function enginePower(){return 26+3*save.upgrades.engine;}
 function rcsPower(){return 6+1.5*save.upgrades.rcs;}
 function hullResistance(){return 1-.08*save.upgrades.hull;}
 
 function createLandingGear(){
- return {target:1,progress:1,legs:[{side:-1,compression:0,touching:false},{side:1,compression:0,touching:false}]};
+ return {target:0,progress:0,legs:[{side:-1,compression:0,touching:false},{side:1,compression:0,touching:false}]};
 }
 function worldPoint(s,x,y){
  const c=Math.cos(s.angle),sn=Math.sin(s.angle);
@@ -169,12 +175,14 @@ function showEnvironment(m){
 }
 
 function startMission(m){
+ if(save.fuel<=1e-6||save.hull<=1e-6){showHangar();return;}
  selectedMission=m;
  terrain=makeTerrain(m);
  stars=Array.from({length:170},()=>({x:Math.random()*W,y:Math.random()*H*.72,r:Math.random()*1.5+.3,a:Math.random()*.7+.2}));
  const fuelMax=maxFuel();
- ship={x:120,y:120,vx:m.startVx,vy:0,angle:0,angVel:0,fuel:fuelMax*m.startFuel,fuelMax,hull:maxHull(),hullMax:maxHull(),crew:100,happiness:100,thrusting:false,rcsL:false,rcsR:false,gVert:0,gLat:0,prevVx:0,prevVy:0,peakG:0,gear:createLandingGear(),settleTime:0,failureReason:''};
- missionTime=0;result=null;windPhase=0;shipAccel={x:0,y:0};
+ ship={x:120,y:120,vx:m.startVx,vy:0,angle:0,angVel:0,fuel:save.fuel,fuelMax,hull:save.hull,hullMax:maxHull(),crew:100,happiness:100,thrusting:false,rcsL:false,rcsR:false,gVert:0,gLat:0,prevVx:0,prevVy:0,peakG:0,gear:createLandingGear(),settleTime:0,failureReason:''};
+ approachState=ApproachWarnings.create(Math.max(0,clearanceAt(ship).gap/SCALE));
+ missionTime=0;result=null;windPhase=0;shipAccel={x:0,y:0};resourceSaveElapsed=0;
  state='play';
  screenEl.style.display='none';
  screenEl.classList.add('hidden');
@@ -227,10 +235,13 @@ function update(dt){
  if(s.x<20){s.x=20;s.vx=Math.abs(s.vx)*.4;s.hull=Math.max(0,s.hull-2*hullResistance());s.happiness=Math.max(0,s.happiness-3);}
  if(s.x>W-20){s.x=W-20;s.vx=-Math.abs(s.vx)*.4;s.hull=Math.max(0,s.hull-2*hullResistance());s.happiness=Math.max(0,s.happiness-3);}
  if(s.y<20){s.y=20;s.vy=Math.max(s.vy,0);}
+ save.fuel=s.fuel;save.hull=s.hull;resourceSaveElapsed+=dt;
+ if(resourceSaveElapsed>=1){persist();resourceSaveElapsed=0;}
 
  if(s.failureReason||s.hull<=0||s.crew<=0){
-  state='over';result=calculatePayout(false);showResult(false);return;
+  state='over';result=calculatePayout(false);persist();showResult(false);return;
  }
+ ApproachWarnings.update(approachState,s,Math.max(0,clearanceAt(s).gap/SCALE),dt);
  const pad=terrain.pad;
  const onPad=s.gear.progress>=.999&&s.gear.legs.every(leg=>{
   const foot=gearFoot(s,leg);
@@ -241,7 +252,9 @@ function update(dt){
  if(s.settleTime>=LANDING.settleTime){
   state='won';result=calculatePayout(true);
   if(!save.completed.includes(m.id))save.completed.push(m.id);
-  save.credits+=result.money;persist();showResult(true);
+  const payment=FuelEconomy.settle(save,result.money);
+  result.debtRepaid=payment.repaid;result.netMoney=payment.net;
+  persist();showResult(true);
  }
 }
 
@@ -251,7 +264,7 @@ function calculatePayout(success){
  const happinessBonus=Math.round(s.happiness*HAPPINESS_RATE);
  const speedBonus=Math.min(SPEED_BONUS_MAX,Math.max(0,Math.round((TARGET_TIME-missionTime)*SPEED_BONUS_RATE)));
  const money=success?selectedMission.fare+fuelBonus+happinessBonus+speedBonus:0;
- return {money,fuelBonus,happinessBonus,speedBonus};
+ return {money,fuelBonus,happinessBonus,speedBonus,debtRepaid:0,netMoney:money};
 }
 
 function draw(){
@@ -276,6 +289,11 @@ function draw(){
  if(showTrajectory&&state==='play')drawTrajectory();
  drawShip();
  if(showFlightInstruments&&state==='play')drawShipReadouts();
+ ApproachWarnings.render(approachAlertEl,approachState,state==='play');
+ const gearStatusEl=document.getElementById('gearStatus');
+ const status=ApproachWarnings.gearStatus(ship.gear);
+ gearStatusEl.textContent=status;
+ gearStatusEl.className=status==='DOWN'?'good':approachState&&approachState.warning&&approachState.warning.tone==='critical'?'bad':'warn';
  document.getElementById('time').textContent=missionTime.toFixed(1);
  document.getElementById('alt').textContent=Math.max(0,Math.round(clearanceAt(ship).gap/SCALE));
  document.getElementById('fuelText').textContent=`${Math.round(ship.fuel)} / ${ship.fuelMax}`;
@@ -306,7 +324,7 @@ function drawShipReadouts(){
  ctx.lineTo(ex-dx/len*12,ey-dy/len*12);ctx.lineTo(ex,ey);ctx.stroke();
  ctx.fillStyle='rgba(8,14,28,.82)';ctx.fillRect(x,y,bw,bh);ctx.strokeRect(x,y,bw,bh);
  ctx.font='11px ui-monospace,monospace';ctx.textBaseline='middle';
- const gearStatus=Math.abs(s.gear.progress-s.gear.target)>.001?'MOVING':s.gear.progress>=.999?'DOWN':'UP';
+ const gearStatus=ApproachWarnings.gearStatus(s.gear);
  const rows=[
   ['SPEED',Math.hypot(s.vx,s.vy).toFixed(1)+' m/s','#dfe7ff'],
   ['VERT',s.vy.toFixed(1)+' m/s','#59c2ff'],
@@ -359,6 +377,7 @@ function drawTrajectory(){
 
 function drawLandingGear(s){
  const p=s.gear.progress;
+ if(p<=.001)return;
  ctx.lineWidth=2;
  for(const leg of s.gear.legs){
   const x=leg.side*(11+8*p),y=8+20*p-leg.compression;
@@ -385,6 +404,7 @@ function drawShip(){
 }
 
 function showScreen(html){
+ ApproachWarnings.render(approachAlertEl,approachState,false);
  document.getElementById('screenCard').innerHTML=html;
  screenEl.style.display='flex';
  screenEl.classList.remove('hidden');
@@ -398,7 +418,8 @@ function showTitle(){
  showScreen(`
   <h1>ORBITAL EXCURSIONS</h1>
   <p>You are Captain of a near-future tourism shuttle.</p>
-  <p>Credits: <span class="credits">${save.credits}</span> &nbsp;|&nbsp; Missions completed: ${completed}/${MISSIONS.length}</p>
+  <p>Credits: <span class="credits">${FuelEconomy.money(save.credits)}</span> &nbsp;|&nbsp; Missions completed: ${completed}/${MISSIONS.length}</p>
+  <p class="small">Fuel ${save.fuel.toFixed(2)} / ${maxFuel()} units · Hull ${save.hull.toFixed(2)} / ${maxHull()} · Debt ${FuelEconomy.money(save.debt)} cr</p>
   <div class="row" style="margin-top:18px">
    <button type="button" onclick="showMissions()">FLY</button>
    <button type="button" onclick="showHangar()">HANGAR</button>
@@ -407,6 +428,8 @@ function showTitle(){
   <h2>Flight controls</h2>
   <p><kbd>W</kbd>/<kbd>&uarr;</kbd> main engine &nbsp; <kbd>A</kbd>/<kbd>D</kbd> RCS &nbsp; <kbd>Q</kbd>/<kbd>E</kbd> rotate</p>
   <p><kbd>G</kbd> landing gear &nbsp; <kbd>H</kbd> flight callout &nbsp; <kbd>T</kbd> coasting trajectory (engines off)</p>
+  <p>Missions start with gear up. Deploy with G before touchdown. Approach callouts are visual only, in metres.</p>
+  <p>Buy fuel and repairs manually in the hangar. Fuel and hull condition carry across missions and retries.</p>
   <p>Deploy both feet and let the suspension settle on the pad to complete a landing.</p>
   <p>Land gently on the pad, preserve fuel, protect passengers, and arrive quickly.</p>
  `);
@@ -414,6 +437,7 @@ function showTitle(){
 
 function showMissions(){
  state='missions';
+ const fueled=save.fuel>1e-6,operable=save.hull>1e-6;
  const cards=MISSIONS.map((m,i)=>{
   const unlocked=i===0||save.completed.includes(MISSIONS[i-1].id);
   const done=save.completed.includes(m.id);
@@ -421,10 +445,10 @@ function showMissions(){
    <h3>${m.name} ${done?'<span class="good">— COMPLETED</span>':''}</h3>
    <p>${m.description}</p>
    <p class="small">Gravity ${m.gravity.toFixed(1)} m/s² &nbsp;|&nbsp; Pad ${m.padWidth}px &nbsp;|&nbsp; Wind ${m.wind} &nbsp;|&nbsp; Fare ${m.fare} cr</p>
-   <button type="button" ${unlocked?'':"disabled"} onclick="startMissionById('${m.id}')">${unlocked?'LAUNCH':'LOCKED'}</button>
+   <button type="button" ${unlocked&&fueled&&operable?'':"disabled"} onclick="startMissionById('${m.id}')">${!unlocked?'LOCKED':!operable?'REPAIR IN HANGAR':fueled?'LAUNCH':'REFUEL IN HANGAR'}</button>
   </div>`;
  }).join('');
- showScreen(`<h1>MISSION SELECT</h1><p>Credits: <span class="credits">${save.credits}</span></p>${cards}<div class="row"><button type="button" onclick="showTitle()">BACK</button></div>`);
+ showScreen(`<h1>MISSION SELECT</h1><p>Credits: <span class="credits">${FuelEconomy.money(save.credits)}</span> · Fuel ${save.fuel.toFixed(2)} / ${maxFuel()} · Hull ${save.hull.toFixed(2)} / ${maxHull()}</p>${cards}<div class="row"><button type="button" onclick="showHangar()">HANGAR / SERVICE</button><button type="button" onclick="showTitle()">BACK</button></div>`);
 }
 
 function showHangar(){
@@ -440,9 +464,29 @@ function showHangar(){
    <button type="button" ${cost===null?'disabled':affordable?'':'disabled'} onclick="buyUpgrade('${id}')">${cost===null?'MAXED':`UPGRADE — ${cost} cr`}</button>
   </div>`;
  }).join('');
- showScreen(`<h1>HANGAR</h1><p>Credits: <span class="credits">${save.credits}</span></p>${cards}<div class="row"><button type="button" onclick="showTitle()">BACK</button></div>`);
+ showScreen(`<h1>HANGAR</h1><p>Available credits: <span class="credits">${FuelEconomy.money(save.credits)}</span></p>${RepairShop.panel(save)}${FuelEconomy.panel(save)}<h2>Upgrades</h2>${cards}<div class="row"><button type="button" onclick="showMissions()">MISSIONS</button><button type="button" onclick="showTitle()">BACK</button></div>`);
 }
 
+function repairHull(amount){
+ if(state!=='hangar')return;
+ if(RepairShop.repair(save,amount))persist();
+ showHangar();
+}
+function borrowEmergencyRepair(){
+ if(state!=='hangar')return;
+ if(RepairShop.borrow(save))persist();
+ showHangar();
+}
+function buyFuel(amount){
+ if(state!=='hangar')return;
+ if(FuelEconomy.purchase(save,amount))persist();
+ showHangar();
+}
+function borrowEmergencyFuel(){
+ if(state!=='hangar')return;
+ if(FuelEconomy.borrow(save))persist();
+ showHangar();
+}
 function startMissionById(id){startMission(MISSIONS.find(m=>m.id===id));}
 function buyUpgrade(id){
  const u=UPGRADES[id],level=save.upgrades[id];
@@ -452,7 +496,7 @@ function buyUpgrade(id){
  save.credits-=cost;save.upgrades[id]++;persist();showHangar();
 }
 function resetSave(){
- save={credits:0,upgrades:{engine:0,fuel:0,hull:0,rcs:0},completed:[]};persist();showTitle();
+ save=FuelEconomy.fresh();persist();showTitle();
 }
 
 function showResult(success){
@@ -460,12 +504,14 @@ function showResult(success){
  if(success){
   showScreen(`<h1>MISSION COMPLETE</h1><p>${m.name} delivered safely.</p>
    <p>Mission time: ${missionTime.toFixed(1)} s</p>
-   <p>Hull: ${Math.round(ship.hull)}% &nbsp; Health: ${Math.round(ship.crew)}% &nbsp; Happiness: ${Math.round(ship.happiness)}%</p>
+   <p>Hull: ${Math.round(ship.hull/ship.hullMax*100)}% &nbsp; Health: ${Math.round(ship.crew)}% &nbsp; Happiness: ${Math.round(ship.happiness)}%</p>
    <p>Mission fare: ${m.fare} cr<br>Fuel bonus: ${result.fuelBonus} cr<br>Happiness bonus: ${result.happinessBonus} cr<br>Speed bonus: ${result.speedBonus} cr</p>
-   <p><b>Total earned: ${result.money} credits</b></p><p>Peak G: ${ship.peakG.toFixed(1)} G</p>
-   <div class="row"><button type="button" onclick="showMissions()">MISSIONS</button><button type="button" onclick="showHangar()">HANGAR</button><button type="button" onclick="startMissionById('${m.id}')">FLY AGAIN</button></div>`);
+   <p>Gross earned: ${FuelEconomy.money(result.money)} cr<br>Debt repaid: ${FuelEconomy.money(result.debtRepaid)} cr<br><b>Added to balance: ${FuelEconomy.money(result.netMoney)} cr</b></p>
+   <p>Fuel remaining: ${save.fuel.toFixed(2)} / ${maxFuel()} units · Hull: ${save.hull.toFixed(2)} / ${maxHull()} · Debt remaining: ${FuelEconomy.money(save.debt)} cr</p>
+   <p>Peak G: ${ship.peakG.toFixed(1)} G</p>
+   <div class="row"><button type="button" onclick="showMissions()">MISSIONS</button><button type="button" onclick="showHangar()">HANGAR / SERVICE</button><button type="button" onclick="startMissionById('${m.id}')">FLY AGAIN</button></div>`);
  }else{
-  showScreen(`<h1>MISSION FAILED</h1><p>${ship.hull<=0?'The shuttle was destroyed.':ship.crew<=0?'Passengers did not survive the flight.':ship.failureReason||'You missed the landing zone.'}</p><p>No payment was issued.</p><div class="row"><button type="button" onclick="startMissionById('${m.id}')">RETRY</button><button type="button" onclick="showMissions()">MISSIONS</button><button type="button" onclick="showHangar()">HANGAR</button></div>`);
+  showScreen(`<h1>MISSION FAILED</h1><p>${ship.hull<=0?'The shuttle was destroyed.':ship.crew<=0?'Passengers did not survive the flight.':ship.failureReason||'You missed the landing zone.'}</p><p>No payment was issued. Burned fuel and hull damage are retained.</p><p>Fuel remaining: ${save.fuel.toFixed(2)} / ${maxFuel()} units · Hull: ${save.hull.toFixed(2)} / ${maxHull()} · Debt: ${FuelEconomy.money(save.debt)} cr</p><div class="row"><button type="button" onclick="startMissionById('${m.id}')">RETRY</button><button type="button" onclick="showMissions()">MISSIONS</button><button type="button" onclick="showHangar()">HANGAR / SERVICE</button></div>`);
  }
 }
 
@@ -478,6 +524,6 @@ function loop(now){
 
 terrain=makeTerrain(MISSIONS[0]);
 stars=Array.from({length:170},()=>({x:Math.random()*W,y:Math.random()*H*.72,r:Math.random()*1.5+.3,a:Math.random()*.7+.2}));
-ship={x:120,y:120,vx:0,vy:0,angle:0,angVel:0,fuel:100,fuelMax:100,hull:100,hullMax:100,crew:100,happiness:100,thrusting:false,rcsL:false,rcsR:false,gVert:0,gLat:0,prevVx:0,prevVy:0,peakG:0,gear:createLandingGear(),settleTime:0,failureReason:''};
+ship={x:120,y:120,vx:0,vy:0,angle:0,angVel:0,fuel:save.fuel,fuelMax:maxFuel(),hull:save.hull,hullMax:maxHull(),crew:100,happiness:100,thrusting:false,rcsL:false,rcsR:false,gVert:0,gLat:0,prevVx:0,prevVy:0,peakG:0,gear:createLandingGear(),settleTime:0,failureReason:''};
 showTitle();
 requestAnimationFrame(loop);
