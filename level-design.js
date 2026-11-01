@@ -89,7 +89,151 @@ const LevelDesign=(()=>{
   description:'Match the drifting terminal’s sideways motion before committing to a final descent.',
   environment:jupiterEnvironment
  };
- MISSIONS.push(jupiterFloat,jupiterDrift);
+ const jupiterStorm={
+  id:'jupiter-storm',
+  name:'Storm Anchor',
+  fare:1750,
+  gravity:8.2,
+  padWidth:100,
+  roughness:1,
+  wind:13,
+  drag:.12,
+  startVx:30,
+  startFuel:.82,
+  unlockAt:5,
+  requires:'jupiter-drift',
+  destination:'jupiter',
+  platform:{x:.5,y:.66,width:100,sway:{x:10,y:18,speed:.4}},
+  description:'The station rises and falls through the storm. Time your descent and settle as the platform levels.',
+  environment:jupiterEnvironment
+ };
+ const jupiterBrass={
+  id:'jupiter-brass',
+  name:'Brass Relay',
+  fare:2050,
+  gravity:8.2,
+  padWidth:90,
+  roughness:1,
+  wind:14,
+  drag:.125,
+  startVx:32,
+  startFuel:.8,
+  unlockAt:5,
+  requires:'jupiter-storm',
+  destination:'jupiter',
+  platform:{x:.42,y:.64,width:90,sway:{x:10,y:14,speed:.45},drift:{x:220,y:8,speed:.25}},
+  description:'A narrow brass relay drifts steadily through the cloud deck. Match its sideways motion before descending.',
+  environment:jupiterEnvironment
+ };
+ const jupiterCopper={
+  id:'jupiter-copper',
+  name:'Copper Crossing',
+  fare:2350,
+  gravity:8.2,
+  padWidth:85,
+  roughness:1,
+  wind:14,
+  drag:.13,
+  startVx:34,
+  startFuel:.78,
+  unlockAt:5,
+  requires:'jupiter-brass',
+  destination:'jupiter',
+  platform:{x:.38,y:.62,width:85,sway:{x:12,y:16,speed:.5},drift:{x:260,y:9,speed:.3}},
+  description:'The copper crossing sweeps across a wide storm corridor. Intercept its motion, then brake with the wind.',
+  environment:jupiterEnvironment
+ };
+ const jupiterHigh={
+  id:'jupiter-high',
+  name:'High Balloon Dock',
+  fare:2650,
+  gravity:8.2,
+  padWidth:90,
+  roughness:1,
+  wind:15,
+  drag:.13,
+  startVx:35,
+  startFuel:.78,
+  unlockAt:5,
+  requires:'jupiter-copper',
+  destination:'jupiter',
+  platform:{x:.45,y:.52,width:90,sway:{x:14,y:22,speed:.5}},
+  description:'A high-altitude dock sways above the cloud deck. Wait for the platform to level before committing.',
+  environment:jupiterEnvironment
+ };
+ const jupiterGust={
+  id:'jupiter-gust',
+  name:'Gust Line',
+  fare:2950,
+  gravity:8.2,
+  padWidth:80,
+  roughness:1,
+  wind:17,
+  drag:.135,
+  startVx:37,
+  startFuel:.75,
+  unlockAt:5,
+  requires:'jupiter-high',
+  destination:'jupiter',
+  platform:{x:.45,y:.62,width:80,sway:{x:12,y:18,speed:.5},drift:{x:200,y:8,speed:.25}},
+  description:'A powerful gust line pushes across the approach. Correct early and use the platform’s motion to your advantage.',
+  environment:jupiterEnvironment
+ };
+ const jupiterRivet={
+  id:'jupiter-rivet',
+  name:'Rivet Yard',
+  fare:3250,
+  gravity:8.2,
+  padWidth:75,
+  roughness:1,
+  wind:18,
+  drag:.14,
+  startVx:39,
+  startFuel:.75,
+  unlockAt:5,
+  requires:'jupiter-gust',
+  destination:'jupiter',
+  platform:{x:.4,y:.6,width:75,sway:{x:16,y:24,speed:.55}},
+  description:'A compact riveted yard swings through the storm. There is very little room to correct a late approach.',
+  environment:jupiterEnvironment
+ };
+ const jupiterTempest={
+  id:'jupiter-tempest',
+  name:'Tempest Terminal',
+  fare:3600,
+  gravity:8.2,
+  padWidth:70,
+  roughness:1,
+  wind:19,
+  drag:.145,
+  startVx:41,
+  startFuel:.72,
+  unlockAt:5,
+  requires:'jupiter-rivet',
+  destination:'jupiter',
+  platform:{x:.38,y:.58,width:70,sway:{x:14,y:20,speed:.6},drift:{x:240,y:9,speed:.3}},
+  description:'The tempest terminal combines drift, sway, and severe wind. Read its motion and commit only when aligned.',
+  environment:jupiterEnvironment
+ };
+ const jupiterZeppelin={
+  id:'jupiter-zeppelin',
+  name:'Zeppelin Grand Terminal',
+  fare:4000,
+  gravity:8.2,
+  padWidth:65,
+  roughness:1,
+  wind:20,
+  drag:.15,
+  startVx:43,
+  startFuel:.7,
+  unlockAt:5,
+  requires:'jupiter-tempest',
+  destination:'jupiter',
+  platform:{x:.4,y:.62,width:65,sway:{x:16,y:26,speed:.65},drift:{x:300,y:10,speed:.35}},
+  description:'The grand terminal rides the storm at high speed. Match its motion, fight the crosswind, and settle with absolute precision.',
+  environment:jupiterEnvironment
+ };
+ MISSIONS.push(jupiterFloat,jupiterDrift,jupiterStorm,jupiterBrass,jupiterCopper,jupiterHigh,jupiterGust,jupiterRivet,jupiterTempest,jupiterZeppelin);
  roots.push(jupiterFloat);
  destinations.push({id:'jupiter',name:'Jupiter',intro:'jupiter-float',previous:'io',environment:jupiterEnvironment,gravity:jupiterFloat.gravity,drag:jupiterFloat.drag,wind:jupiterFloat.wind});
  const done=id=>save.completed.includes(id);
