@@ -73,4 +73,18 @@
   ctx.beginPath();ctx.ellipse(x,mastY,2,7,0,0,Math.PI*2);ctx.stroke();
   ctx.restore();
  };
+ const drawWorld=draw;
+ let highGShake=0,lastVisualTime=clock(),previousShip=null;
+ draw=function(){
+  const now=clock(),dt=Math.min(.1,Math.max(0,now-lastVisualTime));
+  lastVisualTime=now;
+  if(ship!==previousShip){highGShake=0;previousShip=ship;}
+  const gLoad=state==='play'?Math.hypot(ship.gVert,ship.gLat):0;
+  const target=8*Math.min(1,Math.max(0,(gLoad-SAFE_G)/(HARD_G-SAFE_G)));
+  const rate=target>highGShake?12:9;
+  highGShake+=(target-highGShake)*(1-Math.exp(-rate*dt));
+  const impactShake=cameraShake;
+  cameraShake=Math.min(12,Math.max(0,impactShake)+highGShake);
+  try{drawWorld();}finally{cameraShake=impactShake;}
+ };
 })();
