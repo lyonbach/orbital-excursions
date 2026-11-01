@@ -10,10 +10,10 @@
   ctx.restore();
  }
  const themes={
-  lunar:{skyTop:'#040718',skyMid:'#0b1630',skyBottom:'#16233d',surface:'#2a3346',surfaceDark:'#1a2231',surfaceLight:'#3d4a61',accent:'#c9d6ea',planet:'#c9d6ea',planetX:.82,planetY:.22,planetR:70,haze:'rgba(201,214,234,.04)'},
-  mars:{skyTop:'#180a12',skyMid:'#3b1620',skyBottom:'#6b2a20',surface:'#5d2f22',surfaceDark:'#3d1f18',surfaceLight:'#7c4230',accent:'#ffb08a',planet:'#f2b48c',planetX:.18,planetY:.20,planetR:52,haze:'rgba(255,176,138,.07)'},
-  titan:{skyTop:'#12100a',skyMid:'#2f230f',skyBottom:'#5a3f16',surface:'#2f2416',surfaceDark:'#1d160e',surfaceLight:'#4a3a22',accent:'#ffcf7a',planet:'#e8c07a',planetX:.76,planetY:.16,planetR:88,haze:'rgba(255,207,122,.10)'},
-  io:{skyTop:'#0d0714',skyMid:'#241026',skyBottom:'#4a1c22',surface:'#6d5a20',surfaceDark:'#463a14',surfaceLight:'#8d742c',accent:'#ffd166',planet:'#e0a35a',planetX:.24,planetY:.18,planetR:64,haze:'rgba(255,209,102,.07)'}
+  lunar:{skyTop:'#040718',skyMid:'#0b1630',skyBottom:'#16233d',surface:'#2a3346',surfaceDark:'#1a2231',surfaceLight:'#3d4a61',accent:'#c9d6ea',planet:'#c9d6ea',planetX:.82,planetY:.22,planetR:70,haze:'rgba(201,214,234,.04)',particle:'rgba(201,214,234,.45)'},
+  mars:{skyTop:'#180a12',skyMid:'#3b1620',skyBottom:'#6b2a20',surface:'#5d2f22',surfaceDark:'#3d1f18',surfaceLight:'#7c4230',accent:'#ffb08a',planet:'#f2b48c',planetX:.18,planetY:.20,planetR:52,haze:'rgba(255,176,138,.07)',particle:'rgba(255,176,138,.55)'},
+  titan:{skyTop:'#12100a',skyMid:'#2f230f',skyBottom:'#5a3f16',surface:'#2f2416',surfaceDark:'#1d160e',surfaceLight:'#4a3a22',accent:'#ffcf7a',planet:'#e8c07a',planetX:.76,planetY:.16,planetR:88,haze:'rgba(255,207,122,.10)',particle:'rgba(255,207,122,.55)'},
+  io:{skyTop:'#0d0714',skyMid:'#241026',skyBottom:'#4a1c22',surface:'#6d5a20',surfaceDark:'#463a14',surfaceLight:'#8d742c',accent:'#ffd166',planet:'#e0a35a',planetX:.24,planetY:.18,planetR:64,haze:'rgba(255,209,102,.07)',particle:'rgba(255,209,102,.55)'}
  };
  function theme(){
   const id=selectedMission&&selectedMission.id;
@@ -166,17 +166,44 @@
   ctx.restore();
  };
  let highGShake=0,lastVisualTime=clock(),previousShip=null;
+ const windParticles=[];
+ function updateWindParticles(dt,T){
+  const m=selectedMission||{wind:0};
+  const wind=Math.sin(windPhase*.7)*m.wind*.08;
+  const strength=Math.min(1,Math.abs(wind)/(m.wind*.08||1));
+  const direction=wind>=0?1:-1;
+  const desired=Math.round(18+strength*70);
+  while(windParticles.length<desired){
+   windParticles.push({x:Math.random()*W,y:Math.random()*H*.92,s:4+Math.random()*13,a:.08+Math.random()*.25,r:.7+Math.random()*1.8,ph:Math.random()*7});
+  }
+  while(windParticles.length>desired)windParticles.pop();
+  const speed=24+strength*190;
+  for(const p of windParticles){
+   p.x+=direction*speed*dt*(.55+p.s/18);
+   p.y+=(Math.sin(clock()*1.7+p.ph)*10+6)*dt;
+   if(direction>0&&p.x>W+20)p.x=-20;
+   if(direction<0&&p.x<-20)p.x=W+20;
+   if(p.y>H*.94)p.y=0;
+  }
+  ctx.save();
+  ctx.fillStyle=T.particle;
+  for(const p of windParticles){
+   ctx.globalAlpha=p.a*(.35+strength*.65);
+   ctx.beginPath();ctx.arc(p.x,p.y,p.r,0,7);ctx.fill();
+  }
+  ctx.restore();ctx.globalAlpha=1;
+ }
  draw=function(){
   const now=clock(),dt=Math.min(.1,Math.max(0,now-lastVisualTime));
   lastVisualTime=now;
   if(ship!==previousShip){highGShake=0;previousShip=ship;}
   const gLoad=state==='play'?Math.hypot(ship.gVert,ship.gLat):0;
-  const target=gLoad<=1.5?0:gLoad<=2.5?2*(gLoad-1.5):
-   gLoad<=3.5?2+2*(gLoad-2.5):4+4*Math.min(1,(gLoad-3.5)/3);
+  const target=gLoad<=1.5?0:gLoad<=2.5?.8*(gLoad-1.5):
+   gLoad<=3.5?.8+.8*(gLoad-2.5):1.6+.8*Math.min(1,(gLoad-3.5)/3);
   const rate=target>highGShake?12:9;
   highGShake+=(target-highGShake)*(1-Math.exp(-rate*dt));
   const impactShake=cameraShake;
-  cameraShake=Math.min(12,Math.max(0,impactShake)+highGShake);
+  cameraShake=Math.min(5,Math.max(0,impactShake)+highGShake);
   ctx.clearRect(0,0,W,H);
   const shakeX=(Math.random()-.5)*cameraShake;
   const shakeY=(Math.random()-.5)*cameraShake;
@@ -186,6 +213,7 @@
   drawTerrain(T);
   drawPad(T);
   drawWindsock(selectedMission);
+  updateWindParticles(dt,T);
   drawDust();
   if(showTrajectory&&state==='play')drawTrajectory();
   drawShip();
