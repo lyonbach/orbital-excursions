@@ -62,6 +62,7 @@ addEventListener('keyup',e=>keys[e.code]=false);
 let ship,terrain,stars,state='title',t=0,missionTime=0,lastT=performance.now(),result=null,selectedMission=MISSIONS[0],windPhase=0,shipAccel={x:0,y:0};
 let approachState=null;
 let dustParticles=[];
+let resultDelay=0;
 const screenEl=document.getElementById('screen'),envEl=document.getElementById('env');
 const approachAlertEl=document.getElementById('approachAlerts');
 function flushFlightResources(){if(state==='play'&&ship){save.fuel=ship.fuel;save.hull=ship.hull;persist();resourceSaveElapsed=0;}}
@@ -224,7 +225,7 @@ function startMission(m){
  ship={x:120,y:120,vx:m.startVx,vy:0,angle:0,angVel:0,fuel:save.fuel,fuelMax,hull:save.hull,hullMax:maxHull(),crew:100,happiness:100,thrusting:false,rcsL:false,rcsR:false,gVert:0,gLat:0,prevVx:0,prevVy:0,peakG:0,gear:createLandingGear(),settleTime:0,failureReason:''};
  approachState=ApproachWarnings.create(Math.max(0,clearanceAt(ship).gap/SCALE));
  missionTime=0;result=null;windPhase=0;shipAccel={x:0,y:0};resourceSaveElapsed=0;
- dustParticles=[];
+ dustParticles=[];resultDelay=0;
  state='play';
  screenEl.style.display='none';
  screenEl.classList.add('hidden');
@@ -297,7 +298,8 @@ function update(dt){
   if(!save.completed.includes(m.id))save.completed.push(m.id);
   const payment=FuelEconomy.settle(save,result.money);
   result.debtRepaid=payment.repaid;result.netMoney=payment.net;
-  persist();showResult(true);
+  persist();
+  resultDelay=3;
  }
 }
 
@@ -441,12 +443,10 @@ function drawLandingLights(s){
  const altitude=clearanceAt(s).gap/SCALE;
  const fade=Math.max(0,1-altitude/35);
  if(fade<=.01)return;
- const intensity=fade*fade;
  for(const lx of [-6,6]){
   const lamp=worldPoint(s,lx,10);
   const groundY=terrainYAt(lamp.x);
   const distance=Math.max(0,groundY-lamp.y);
-  const length=Math.min(280,distance);
   if(distance<8)continue;
   const endY=lamp.y+distance;
   const gradient=ctx.createLinearGradient(lamp.x,lamp.y,lamp.x,endY);
@@ -597,6 +597,10 @@ function showResult(success){
 function loop(now){
  const dt=Math.min(.033,(now-lastT)/1000);lastT=now;
  if(state==='play')update(dt);
+ if(state==='won'&&resultDelay>0){
+  resultDelay-=dt;
+  if(resultDelay<=0)showResult(true);
+ }
  if(ship&&(state==='play'||state==='won'||state==='over'))draw();
  requestAnimationFrame(loop);
 }
