@@ -61,6 +61,7 @@ addEventListener('keyup',e=>keys[e.code]=false);
 
 let ship,terrain,stars,state='title',t=0,missionTime=0,lastT=performance.now(),result=null,selectedMission=MISSIONS[0],windPhase=0,shipAccel={x:0,y:0};
 let approachState=null;
+let dustParticles=[];
 const screenEl=document.getElementById('screen'),envEl=document.getElementById('env');
 const approachAlertEl=document.getElementById('approachAlerts');
 function flushFlightResources(){if(state==='play'&&ship){save.fuel=ship.fuel;save.hull=ship.hull;persist();resourceSaveElapsed=0;}}
@@ -114,6 +115,41 @@ function applyLandingDamage(s,amount){
  s.crew=Math.max(0,s.crew-damage*.8);
  s.happiness=Math.max(0,s.happiness-damage*1.5);
 }
+function spawnDust(x,y,speed,side){
+ const count=Math.min(14,4+Math.floor(speed*1.5));
+ for(let i=0;i<count;i++){
+  if(dustParticles.length>=120)dustParticles.shift();
+  dustParticles.push({
+   x:x+(Math.random()-.5)*6,
+   y:y-1,
+   vx:side*(.4+Math.random()*1.6)+(Math.random()-.5)*1.2,
+   vy:-(.4+Math.random()*1.4)*Math.min(2.2,.5+speed*.16),
+   life:.45+Math.random()*.45,
+   age:0,
+   size:1+Math.random()*2.2
+  });
+ }
+}
+function updateDust(dt){
+ for(const p of dustParticles){
+  p.age+=dt;
+  p.x+=p.vx*SCALE*dt;
+  p.y+=p.vy*SCALE*dt;
+  p.vy+=2.2*dt;
+  p.vx*=Math.exp(-1.8*dt);
+ }
+ dustParticles=dustParticles.filter(p=>p.age<p.life);
+}
+function drawDust(){
+ for(const p of dustParticles){
+  ctx.globalAlpha=Math.max(0,1-p.age/p.life)*.5;
+  ctx.fillStyle='#8fa3c7';
+  ctx.beginPath();
+  ctx.arc(p.x,p.y,p.size,0,7);
+  ctx.fill();
+ }
+ ctx.globalAlpha=1;
+}
 function integrateLandingMotion(s,dt,ax,ay){
  const steps=Math.ceil(dt*120),h=dt/steps;
  for(let i=0;i<steps&&!s.failureReason;i++){
@@ -126,6 +162,7 @@ function integrateLandingMotion(s,dt,ax,ay){
    if(touching){
     const rx=(foot.x-s.x)/SCALE,normalSpeed=s.vy+s.angVel*rx;
     if(!leg.touching){
+     spawnDust(foot.x,terrainYAt(foot.x),Math.abs(normalSpeed),leg.side);
      applyLandingDamage(s,(Math.max(0,normalSpeed-SAFE_VS-1.2)*8+Math.max(0,Math.abs(s.vx)-SAFE_HS)*5)/2);
      const onPad=foot.x>terrain.pad.x&&foot.x<terrain.pad.x+terrain.pad.w;
      if(normalSpeed>LANDING.crashSpeed||(!onPad&&normalSpeed>SAFE_VS*2.2))s.failureReason='The landing impact was too severe.';
@@ -187,6 +224,7 @@ function startMission(m){
  ship={x:120,y:120,vx:m.startVx,vy:0,angle:0,angVel:0,fuel:save.fuel,fuelMax,hull:save.hull,hullMax:maxHull(),crew:100,happiness:100,thrusting:false,rcsL:false,rcsR:false,gVert:0,gLat:0,prevVx:0,prevVy:0,peakG:0,gear:createLandingGear(),settleTime:0,failureReason:''};
  approachState=ApproachWarnings.create(Math.max(0,clearanceAt(ship).gap/SCALE));
  missionTime=0;result=null;windPhase=0;shipAccel={x:0,y:0};resourceSaveElapsed=0;
+ dustParticles=[];
  state='play';
  screenEl.style.display='none';
  screenEl.classList.add('hidden');
@@ -221,6 +259,7 @@ function update(dt){
  const drag=m.drag||0;
  ax-=s.vx*drag;ay-=s.vy*drag;
  integrateLandingMotion(s,dt,ax,ay);
+ updateDust(dt);
  const dvx=(s.vx-s.prevVx)/dt,dvy=(s.vy-s.prevVy)/dt;
  shipAccel={x:dvx,y:dvy};
  s.gLat=Math.abs(dvx)/G;s.gVert=Math.abs(dvy)/G;
@@ -290,6 +329,7 @@ function draw(){
   ctx.fillStyle=`rgba(120,220,255,${.25+blink*.65})`;
   ctx.fillRect(p.x+8+i*((p.w-16)/4)-2,p.y-4,5,5);
  }
+ drawDust();
  if(showTrajectory&&state==='play')drawTrajectory();
  drawShip();
  if(showFlightInstruments&&state==='play')drawShipReadouts();
@@ -399,11 +439,40 @@ function drawLandingGear(s){
 
 function drawShip(){
  const s=ship;
+ const landingLightsOn=state==='play'&&clearanceAt(s).gap/SCALE<=35;
  ctx.save();ctx.translate(s.x,s.y);ctx.rotate(s.angle);
  ThrusterPhysics.draw(ctx,s.jets||[]);
  drawLandingGear(s);
+ if(landingLightsOn){
+  ctx.globalAlpha=.09;
+  ctx.fillStyle='#ffffff';
+  for(const x of [-6,6]){
+   ctx.beginPath();
+   ctx.moveTo(x-2,10);
+   ctx.lineTo(x+2,10);
+   ctx.lineTo(x+16,95);
+   ctx.lineTo(x-16,95);
+   ctx.closePath();
+   ctx.fill();
+  }
+  ctx.globalAlpha=1;
+ }
  ctx.fillStyle='#dfe7ff';ctx.beginPath();ctx.moveTo(0,-20);ctx.quadraticCurveTo(16,-4,14,12);ctx.lineTo(-14,12);ctx.quadraticCurveTo(-16,-4,0,-20);ctx.fill();
  ctx.fillStyle='#7fa8ff';ctx.fillRect(-7,-8,14,7);
+ const strobePhase=Math.floor(t*2.5)%2;
+ ctx.globalAlpha=strobePhase===0?1:.22;
+ ctx.fillStyle='#ff5252';ctx.beginPath();ctx.arc(-15,-3,2.2,0,7);ctx.fill();
+ ctx.globalAlpha=strobePhase===1?1:.22;
+ ctx.fillStyle='#4ade80';ctx.beginPath();ctx.arc(15,-3,2.2,0,7);ctx.fill();
+ ctx.globalAlpha=Math.floor(t*1.5)%3===0?1:.1;
+ ctx.fillStyle='#ffffff';ctx.beginPath();ctx.arc(0,-20,1.8,0,7);ctx.fill();
+ if(landingLightsOn){
+  ctx.globalAlpha=.9;
+  ctx.fillStyle='#ffffff';
+  ctx.beginPath();ctx.arc(-6,10,1.6,0,7);ctx.fill();
+  ctx.beginPath();ctx.arc(6,10,1.6,0,7);ctx.fill();
+ }
+ ctx.globalAlpha=1;
  ctx.restore();
 }
 
