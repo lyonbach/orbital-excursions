@@ -12,7 +12,6 @@
   .bar{height:9px;background:#16233d;border:1px solid #31456f;border-radius:5px;margin:3px 0 8px}
   .fill{height:100%;border-radius:4px}
   #fuelFill{background:#59c2ff} #hullFill{background:#7ee787} #crewFill{background:#ffd166} #happyFill{background:#c792ea}
-  #gvFill{background:#ff7b72} #glFill{background:#ffa657}
   #env{position:absolute;top:14px;right:14px;width:300px;max-height:calc(100vh - 230px);overflow:auto;background:rgba(8,14,28,.68);border:1px solid #2b3d66;border-radius:8px;padding:12px;font-size:12.5px;line-height:1.45}
   #env h2{margin:0 0 7px;color:#8ab4ff;font-size:16px}
   #env dl{margin:0}
@@ -46,14 +45,10 @@
   <div class="panel">
     <div>TIME <span id="time">0.0</span> s</div>
     <div>ALTITUDE <span id="alt">0</span> m</div>
-    <div>V-SPEED <span id="vs">0.0</span> m/s</div>
-    <div>H-SPEED <span id="hs">0.0</span> m/s</div>
     <div>FUEL <span id="fuelText"></span></div><div class="bar"><div id="fuelFill" class="fill" style="width:100%"></div></div>
     <div>HULL</div><div class="bar"><div id="hullFill" class="fill" style="width:100%"></div></div>
     <div>PASSENGER HEALTH</div><div class="bar"><div id="crewFill" class="fill" style="width:100%"></div></div>
     <div>PASSENGER HAPPINESS</div><div class="bar"><div id="happyFill" class="fill" style="width:100%"></div></div>
-    <div>VERTICAL G <span id="gv">0.0</span></div><div class="bar"><div id="gvFill" class="fill" style="width:0%"></div></div>
-    <div>LATERAL G <span id="gl">0.0</span></div><div class="bar"><div id="glFill" class="fill" style="width:0%"></div></div>
   </div>
 </div>
 <div id="env" class="hidden"></div>
@@ -100,11 +95,16 @@ function loadSave(){
 function persist(){localStorage.setItem(SAVE_KEY,JSON.stringify(save));}
 
 const keys={};
-let showFlightInstruments=true;
+let showFlightInstruments=true,showTrajectory=true;
 addEventListener('keydown',e=>{
+ const target=e.target;
+ if(target&&(target.isContentEditable||['INPUT','TEXTAREA','SELECT'].includes(target.tagName)))return;
  keys[e.code]=true;
  if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space'].includes(e.code))e.preventDefault();
- if(e.code==='KeyH')showFlightInstruments=!showFlightInstruments;
+ if(!e.repeat&&!e.ctrlKey&&!e.metaKey&&!e.altKey&&state==='play'){
+  if(e.code==='KeyH'){e.preventDefault();showFlightInstruments=!showFlightInstruments;}
+  if(e.code==='KeyT'){e.preventDefault();showTrajectory=!showTrajectory;}
+ }
  if(e.code==='Escape'&&(state==='missions'||state==='hangar'))showTitle();
 });
 addEventListener('keyup',e=>keys[e.code]=false);
@@ -267,96 +267,83 @@ function draw(){
   ctx.fillStyle=`rgba(120,220,255,${.25+blink*.65})`;
   ctx.fillRect(p.x+8+i*((p.w-16)/4)-2,p.y-4,5,5);
  }
+ if(showTrajectory&&state==='play')drawTrajectory();
  drawShip();
- if(showFlightInstruments){
-  drawShipReadouts();
-  drawVectors();
- }
+ if(showFlightInstruments&&state==='play')drawShipReadouts();
  document.getElementById('time').textContent=missionTime.toFixed(1);
  document.getElementById('alt').textContent=Math.max(0,Math.round((terrainYAt(ship.x)-ship.y-18)/SCALE));
- document.getElementById('vs').textContent=ship.vy.toFixed(1);
- document.getElementById('hs').textContent=ship.vx.toFixed(1);
- document.getElementById('gv').textContent=ship.gVert.toFixed(1);
- document.getElementById('gl').textContent=ship.gLat.toFixed(1);
  document.getElementById('fuelText').textContent=`${Math.round(ship.fuel)} / ${ship.fuelMax}`;
  document.getElementById('fuelFill').style.width=(ship.fuel/ship.fuelMax*100)+'%';
  document.getElementById('hullFill').style.width=(ship.hull/ship.hullMax*100)+'%';
  document.getElementById('crewFill').style.width=ship.crew+'%';
  document.getElementById('happyFill').style.width=ship.happiness+'%';
- document.getElementById('gvFill').style.width=Math.min(100,ship.gVert/10*100)+'%';
- document.getElementById('glFill').style.width=Math.min(100,ship.gLat/10*100)+'%';
-}
-
-function drawVector(x,y,vx,vy,scale,maxLen,color,label){
- const mag=Math.hypot(vx,vy);
- if(mag<.01)return;
- const strength=Math.min(1,mag*scale/maxLen);
- const len=Math.min(maxLen,mag*scale);
- const ux=vx/mag,uy=vy/mag;
- const ex=x+ux*len,ey=y+uy*len;
- ctx.save();
- ctx.globalAlpha=.45+strength*.55;
- ctx.strokeStyle=color;ctx.fillStyle=color;
- ctx.lineWidth=1+strength*1.2;
- ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(ex,ey);ctx.stroke();
- const head=3.5+strength*3;
- const angle=Math.atan2(uy,ux);
- ctx.beginPath();
- ctx.moveTo(ex,ey);
- ctx.lineTo(ex-head*Math.cos(angle-.45),ey-head*Math.sin(angle-.45));
- ctx.lineTo(ex-head*Math.cos(angle+.45),ey-head*Math.sin(angle+.45));
- ctx.closePath();ctx.fill();
- if(label){
-  ctx.globalAlpha=.75;
-  ctx.font='9px ui-monospace,monospace';
-  ctx.fillText(label,ex+5,ey-4);
- }
- ctx.restore();
-}
-
-function drawVectors(){
- const cx=W-105,cy=H-105;
- ctx.save();
- ctx.globalAlpha=.55;
- ctx.fillStyle='rgba(8,14,28,.5)';
- ctx.strokeStyle='#2b3d66';
- ctx.lineWidth=1;
- ctx.beginPath();ctx.arc(cx,cy,70,0,Math.PI*2);ctx.fill();ctx.stroke();
- ctx.restore();
-
- const speed=Math.hypot(ship.vx,ship.vy);
- drawVector(cx,cy,ship.vx,ship.vy,2.8,55,'#59c2ff',`V ${speed.toFixed(1)}`);
-
- const acc=Math.hypot(shipAccel.x,shipAccel.y);
- if(speed>.05&&acc>.05){
-  const along=(shipAccel.x*ship.vx+shipAccel.y*ship.vy)/speed;
-  const alongX=shipAccel.x*(along/acc),alongY=shipAccel.y*(along/acc);
-  if(along>=0)drawVector(cx,cy,alongX,alongY,2.8,45,'#7ee787',`A ${acc.toFixed(1)}`);
-  else drawVector(cx,cy,alongX,alongY,2.8,45,'#ff7b72',`DEC ${Math.abs(along).toFixed(1)}`);
- }else if(acc>.05){
-  drawVector(cx,cy,shipAccel.x,shipAccel.y,2.8,45,'#7ee787',`A ${acc.toFixed(1)}`);
- }
 }
 
 function drawShipReadouts(){
- const s=ship;
- const speed=Math.hypot(s.vx,s.vy);
- const totalG=Math.hypot(s.vx-s.prevVx,s.vy-s.prevVy)/G;
- ctx.save();
- ctx.font='10px ui-monospace,monospace';
- ctx.textAlign='center';
- ctx.fillStyle='rgba(223,231,255,.92)';
- ctx.fillText(`V ${speed.toFixed(1)}`,s.x,s.y-32);
+ const s=ship,margin=10,bw=Math.min(180,Math.max(1,W-20)),bh=88;
+ const clamp=(v,lo,hi)=>Math.max(lo,Math.min(v,Math.max(lo,hi)));
+ const obstacles=[document.querySelector('#hud .panel'),envEl].filter(el=>el&&!el.closest('.hidden')).map(el=>el.getBoundingClientRect());
+ const candidates=[
+  {x:s.x+48,y:s.y-112},{x:s.x-48-bw,y:s.y-112},
+  {x:s.x+48,y:s.y+34},{x:s.x-48-bw,y:s.y+34},
+  {x:s.x-bw/2,y:s.y+48},{x:s.x-bw/2,y:s.y-48-bh}
+ ].map(p=>({x:clamp(p.x,margin,W-bw-margin),y:clamp(p.y,margin,H-bh-margin)}));
+ const overlap=(p,r)=>Math.max(0,Math.min(p.x+bw,r.right+6)-Math.max(p.x,r.left-6))*Math.max(0,Math.min(p.y+bh,r.bottom+6)-Math.max(p.y,r.top-6));
+ const shipRect={left:s.x-25,right:s.x+25,top:s.y-25,bottom:s.y+25};
+ const score=p=>obstacles.reduce((sum,r)=>sum+overlap(p,r),0)+overlap(p,shipRect)*2;
+ const box=candidates.reduce((best,p)=>score(p)<score(best)?p:best);
+ const x=box.x,y=box.y,ex=clamp(s.x,x,x+bw),ey=clamp(s.y,y,y+bh);
+ const dx=ex-s.x,dy=ey-s.y,len=Math.hypot(dx,dy)||1;
+ ctx.save();ctx.globalAlpha=1;ctx.lineWidth=1;
+ ctx.strokeStyle='rgba(159,180,216,.8)';
+ ctx.beginPath();ctx.moveTo(s.x+dx/len*25,s.y+dy/len*25);
+ ctx.lineTo(ex-dx/len*12,ey-dy/len*12);ctx.lineTo(ex,ey);ctx.stroke();
+ ctx.fillStyle='rgba(8,14,28,.82)';ctx.fillRect(x,y,bw,bh);ctx.strokeRect(x,y,bw,bh);
+ ctx.font='11px ui-monospace,monospace';ctx.textBaseline='middle';
+ const rows=[
+  ['SPEED',Math.hypot(s.vx,s.vy).toFixed(1)+' m/s','#dfe7ff'],
+  ['VERT',s.vy.toFixed(1)+' m/s','#59c2ff'],
+  ['HORIZ',s.vx.toFixed(1)+' m/s','#ffa657'],
+  ['G-LOAD',Math.hypot(s.gVert,s.gLat).toFixed(1)+' g','#7ee787']
+ ];
+ rows.forEach(([label,value,color],i)=>{
+  ctx.fillStyle=color;ctx.textAlign='left';ctx.fillText(label,x+10,y+14+i*20);
+  ctx.textAlign='right';ctx.fillText(value,x+bw-10,y+14+i*20);
+ });
+ ctx.restore();
+}
 
- ctx.textAlign='left';
- ctx.fillStyle='#59c2ff';
- ctx.fillText(`VS ${s.vy.toFixed(1)}`,s.x+26,s.y-4);
-
- ctx.fillStyle='#ffa657';
- ctx.fillText(`HS ${s.vx.toFixed(1)}`,s.x+26,s.y+12);
-
- ctx.fillStyle='#7ee787';
- ctx.fillText(`G ${totalG.toFixed(1)}`,s.x-58,s.y+4);
+function drawTrajectory(){
+ const dt=1/60,steps=480,m=selectedMission;
+ let x=ship.x,y=ship.y,vx=ship.vx,vy=ship.vy,impact=null;
+ const points=[{x,y}];
+ for(let i=1;i<=steps;i++){
+  const oldX=x,oldY=y,drag=m.drag||0;
+  const ax=(m.wind?Math.sin((windPhase+i*dt)*.7)*m.wind*.08:0)-vx*drag;
+  const ay=m.gravity-vy*drag;
+  vx+=ax*dt;vy+=ay*dt;x+=vx*SCALE*dt;y+=vy*SCALE*dt;
+  if(x<20||x>W-20||y<20){points.push({x,y});break;}
+  if(y+18>=terrainYAt(x)){
+   let lo=0,hi=1;
+   for(let j=0;j<10;j++){
+    const f=(lo+hi)/2,px=oldX+(x-oldX)*f,py=oldY+(y-oldY)*f;
+    if(py+18>=terrainYAt(px))hi=f;else lo=f;
+   }
+   x=oldX+(x-oldX)*hi;y=oldY+(y-oldY)*hi;
+   points.push({x,y});impact={x,y:y+18};break;
+  }
+  if(i%4===0)points.push({x,y});
+ }
+ if(points.length<2)return;
+ ctx.save();ctx.globalAlpha=.6;ctx.strokeStyle='#7fd1ff';ctx.lineWidth=1;ctx.setLineDash([5,5]);
+ ctx.beginPath();ctx.moveTo(points[0].x,points[0].y);
+ for(let i=1;i<points.length;i++)ctx.lineTo(points[i].x,points[i].y);
+ ctx.stroke();ctx.setLineDash([]);
+ if(impact){
+  ctx.strokeStyle='#ffd166';ctx.beginPath();
+  ctx.moveTo(impact.x-5,impact.y-5);ctx.lineTo(impact.x+5,impact.y+5);
+  ctx.moveTo(impact.x+5,impact.y-5);ctx.lineTo(impact.x-5,impact.y+5);ctx.stroke();
+ }
  ctx.restore();
 }
 
@@ -397,7 +384,8 @@ function showTitle(){
    <button type="button" onclick="resetSave()" class="small">Reset progress</button>
   </div>
   <h2>Flight controls</h2>
-  <p><kbd>W</kbd>/<kbd>&uarr;</kbd> main engine &nbsp; <kbd>A</kbd>/<kbd>D</kbd> RCS &nbsp; <kbd>Q</kbd>/<kbd>E</kbd> rotate &nbsp; <kbd>H</kbd> instruments</p>
+  <p><kbd>W</kbd>/<kbd>&uarr;</kbd> main engine &nbsp; <kbd>A</kbd>/<kbd>D</kbd> RCS &nbsp; <kbd>Q</kbd>/<kbd>E</kbd> rotate</p>
+  <p><kbd>H</kbd> flight callout &nbsp; <kbd>T</kbd> coasting trajectory (engines off)</p>
   <p>Land gently on the pad, preserve fuel, protect passengers, and arrive quickly.</p>
  `);
 }
