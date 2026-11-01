@@ -7,6 +7,35 @@ const EnvironmentVisuals=(()=>{
  };
  const key=()=>selectedMission.destination||selectedMission.id;
  const theme=()=>themes[key()]||themes.lunar;
+ const windDust=[];
+ function spawnWindDust(dt){
+  const wind=selectedMission.wind||0,magnitude=Math.abs(wind);
+  if(magnitude>=.12){
+   const target=Math.min(24,Math.floor(magnitude*11));
+   while(windDust.length<target)windDust.push({
+    x:wind>0?-20:W+20,y:H*(.58+Math.random()*.26),
+    size:.8+Math.random()*1.7,life:1.1+Math.random()*1.2,age:0,
+    rise:3+Math.random()*9
+   });
+  }
+  for(const p of windDust){
+   p.age+=dt;p.x+=wind*(55+p.size*22)*dt;p.y-=p.rise*dt;
+  }
+  for(let i=windDust.length-1;i>=0;i--){
+   const p=windDust[i];
+   if(p.age>p.life||p.x<-35||p.x>W+35)windDust.splice(i,1);
+  }
+ }
+ function drawWindDust(){
+  if(!windDust.length)return;
+  ctx.save();ctx.fillStyle=theme().dust;
+  for(const p of windDust){
+   const fade=Math.sin(Math.min(1,p.age/p.life)*Math.PI);
+   ctx.globalAlpha=fade*.24;
+   ctx.beginPath();ctx.ellipse(p.x,p.y,p.size*3.4,p.size*.8,0,0,7);ctx.fill();
+  }
+  ctx.restore();
+ }
  function backdrop(){
   const p=theme(),sky=ctx.createLinearGradient(0,0,0,H);
   p.sky.forEach((c,i)=>sky.addColorStop(i/2,c));
@@ -38,7 +67,7 @@ const EnvironmentVisuals=(()=>{
   for(const p of dustParticles){ctx.globalAlpha=Math.max(0,1-p.age/p.life)*.8;ctx.beginPath();ctx.arc(p.x,p.y,p.size,0,7);ctx.fill();}
   ctx.restore();
  };
- draw=function(){
+ draw=function(dt=1/60){
   ctx.clearRect(0,0,W,H);
   ctx.save();ctx.translate((Math.random()-.5)*cameraShake,(Math.random()-.5)*cameraShake);
   backdrop();
@@ -51,7 +80,7 @@ const EnvironmentVisuals=(()=>{
   ctx.fillStyle='#1d2c4a';ctx.fillRect(pad.x,pad.y,pad.w,8);
   ctx.strokeStyle='#7fd1ff';ctx.lineWidth=2;ctx.strokeRect(pad.x,pad.y,pad.w,8);
   drawWindsock(selectedMission);
-  drawDust();
+  spawnWindDust(dt);drawWindDust();drawDust();
   if(showTrajectory&&state==='play')drawTrajectory();
   drawShip();
   if(showFlightInstruments&&state==='play')drawShipReadouts();
@@ -68,5 +97,5 @@ const EnvironmentVisuals=(()=>{
   document.getElementById('crewFill').style.width=ship.crew+'%';
   document.getElementById('happyFill').style.width=ship.happiness+'%';
  };
- return {theme,backdrop};
+ return {theme,backdrop,windDust,spawnWindDust};
 })();
