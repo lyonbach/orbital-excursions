@@ -31,29 +31,28 @@
   const direction=wind>=0?1:-1;
   const x=Math.max(82,terrain.pad.x-92);
   const ground=terrainYAt(x),roof=ground-96;
-  const left=x-21,right=x+21,deck=roof+32;
   ctx.save();
-  ctx.lineWidth=2;ctx.strokeStyle='#637b9d';
-  for(const side of [-1,1]){
-   const top=x+side*14,foot=x+side*26,base=terrainYAt(foot);
-   ctx.beginPath();ctx.moveTo(top,deck);ctx.lineTo(foot,base);ctx.stroke();
-   ctx.fillStyle='#405372';ctx.fillRect(foot-5,base-3,10,4);
-  }
-  ctx.strokeStyle='#344b6c';ctx.lineWidth=1.4;
   for(const offset of [-3,3]){
-   ctx.beginPath();ctx.moveTo(left+offset,deck);
-   ctx.lineTo(right+offset,ground-5);
-   ctx.moveTo(right+offset,deck);ctx.lineTo(left+offset,ground-5);ctx.stroke();
+   const legs=[-1,1].map(side=>({top:x+side*14+offset,foot:x+side*26+offset}));
+   ctx.strokeStyle=offset<0?'#344b6c':'#637b9d';ctx.lineWidth=2;
+   for(const leg of legs){
+    const base=terrainYAt(leg.foot);
+    ctx.beginPath();ctx.moveTo(leg.top,roof);ctx.lineTo(leg.foot,base);ctx.stroke();
+    ctx.fillStyle='#405372';ctx.fillRect(leg.foot-4,base-3,8,4);
+   }
+   const point=(leg,f)=>({x:leg.top+(leg.foot-leg.top)*f,y:roof+(terrainYAt(leg.foot)-roof)*f});
+   ctx.lineWidth=1.2;
+   for(let i=0;i<3;i++){
+    const a=point(legs[0],i/3),b=point(legs[1],i/3);
+    const c=point(legs[0],(i+1)/3),d=point(legs[1],(i+1)/3);
+    ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(d.x,d.y);
+    ctx.moveTo(b.x,b.y);ctx.lineTo(c.x,c.y);
+    ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.stroke();
+   }
   }
-  const tank=ctx.createLinearGradient(left,0,right,0);
-  tank.addColorStop(0,'#243650');tank.addColorStop(.4,'#536c8b');tank.addColorStop(1,'#1b2c44');
-  ctx.fillStyle=tank;ctx.strokeStyle='#7f99b7';ctx.lineWidth=1.5;
-  ctx.beginPath();ctx.moveTo(left,roof+7);
-  ctx.quadraticCurveTo(x,roof-9,right,roof+7);
-  ctx.lineTo(right,deck);ctx.quadraticCurveTo(x,deck+10,left,deck);
-  ctx.closePath();ctx.fill();ctx.stroke();
-  ctx.beginPath();ctx.ellipse(x,roof+7,21,6,0,0,Math.PI*2);ctx.stroke();
-  ctx.strokeStyle='#8aa1bd';ctx.beginPath();ctx.moveTo(left-3,deck+3);ctx.lineTo(right+3,deck+3);ctx.stroke();
+  ctx.fillStyle='#324966';ctx.fillRect(x-22,roof-2,44,5);
+  ctx.strokeStyle='#8aa1bd';ctx.lineWidth=1.5;
+  ctx.beginPath();ctx.moveTo(x-22,roof-2);ctx.lineTo(x+22,roof-2);ctx.stroke();
   const mastY=roof-26;
   ctx.beginPath();ctx.moveTo(x,roof);ctx.lineTo(x,mastY-9);ctx.stroke();
   ctx.fillStyle='#324966';ctx.fillRect(x+12,roof-10,4,13);
