@@ -3,7 +3,8 @@ const EnvironmentVisuals=(()=>{
   lunar:{sky:['#010208','#080b13','#141923'],ground:'#30343e',edge:'#87909e',dust:'#d0d1d4',stars:1,ridges:['#171c27','#252a35'],haze:0},
   mars:{sky:['#24151b','#613b34','#a47758'],ground:'#693c30',edge:'#c18562',dust:'#dba17a',stars:.08,ridges:['#694b43','#805445'],haze:.13},
   titan:{sky:['#201710','#574124','#a17b3e'],ground:'#51422d',edge:'#aa9160',dust:'#c5ab79',stars:.015,ridges:['#706040','#665437'],haze:.28},
-  io:{sky:['#030309','#15121b','#443629'],ground:'#5b4d2b',edge:'#b9a65c',dust:'#d2c387',stars:.9,ridges:['#272329','#39302a'],haze:.05}
+  io:{sky:['#030309','#15121b','#443629'],ground:'#5b4d2b',edge:'#b9a65c',dust:'#d2c387',stars:.9,ridges:['#272329','#39302a'],haze:.05},
+  jupiter:{sky:['#0b1030','#3b2a4d','#a97b4a'],ground:'#232c42',edge:'#7f95bd',dust:'#d9c3a0',stars:.08,ridges:['#4d3358','#7c5340'],haze:.34}
  };
  const key=()=>selectedMission.destination||selectedMission.id;
  const theme=()=>themes[key()]||themes.lunar;
