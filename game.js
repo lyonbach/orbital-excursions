@@ -56,7 +56,9 @@ addEventListener('keydown',e=>{
 addEventListener('keyup',e=>keys[e.code]=false);
 
 let ship,terrain,stars,state='title',t=0,missionTime=0,lastT=performance.now(),result=null,selectedMission=MISSIONS[0],windPhase=0,shipAccel={x:0,y:0};
+let approachState=null;
 const screenEl=document.getElementById('screen'),envEl=document.getElementById('env');
+const approachAlertEl=document.getElementById('approachAlerts');
 function flushFlightFuel(){if(state==='play'&&ship){save.fuel=ship.fuel;persist();fuelSaveElapsed=0;}}
 addEventListener('pagehide',flushFlightFuel);
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden')flushFlightFuel();});
@@ -79,7 +81,7 @@ function rcsPower(){return 6+1.5*save.upgrades.rcs;}
 function hullResistance(){return 1-.08*save.upgrades.hull;}
 
 function createLandingGear(){
- return {target:1,progress:1,legs:[{side:-1,compression:0,touching:false},{side:1,compression:0,touching:false}]};
+ return {target:0,progress:0,legs:[{side:-1,compression:0,touching:false},{side:1,compression:0,touching:false}]};
 }
 function worldPoint(s,x,y){
  const c=Math.cos(s.angle),sn=Math.sin(s.angle);
@@ -179,6 +181,7 @@ function startMission(m){
  stars=Array.from({length:170},()=>({x:Math.random()*W,y:Math.random()*H*.72,r:Math.random()*1.5+.3,a:Math.random()*.7+.2}));
  const fuelMax=maxFuel();
  ship={x:120,y:120,vx:m.startVx,vy:0,angle:0,angVel:0,fuel:save.fuel,fuelMax,hull:maxHull(),hullMax:maxHull(),crew:100,happiness:100,thrusting:false,rcsL:false,rcsR:false,gVert:0,gLat:0,prevVx:0,prevVy:0,peakG:0,gear:createLandingGear(),settleTime:0,failureReason:''};
+ approachState=ApproachWarnings.create(Math.max(0,clearanceAt(ship).gap/SCALE));
  missionTime=0;result=null;windPhase=0;shipAccel={x:0,y:0};fuelSaveElapsed=0;
  state='play';
  screenEl.style.display='none';
@@ -238,6 +241,7 @@ function update(dt){
  if(s.failureReason||s.hull<=0||s.crew<=0){
   state='over';result=calculatePayout(false);persist();showResult(false);return;
  }
+ ApproachWarnings.update(approachState,s,Math.max(0,clearanceAt(s).gap/SCALE),dt);
  const pad=terrain.pad;
  const onPad=s.gear.progress>=.999&&s.gear.legs.every(leg=>{
   const foot=gearFoot(s,leg);
@@ -285,6 +289,11 @@ function draw(){
  if(showTrajectory&&state==='play')drawTrajectory();
  drawShip();
  if(showFlightInstruments&&state==='play')drawShipReadouts();
+ ApproachWarnings.render(approachAlertEl,approachState,state==='play');
+ const gearStatusEl=document.getElementById('gearStatus');
+ const status=ApproachWarnings.gearStatus(ship.gear);
+ gearStatusEl.textContent=status;
+ gearStatusEl.className=status==='DOWN'?'good':approachState&&approachState.warning&&approachState.warning.tone==='critical'?'bad':'warn';
  document.getElementById('time').textContent=missionTime.toFixed(1);
  document.getElementById('alt').textContent=Math.max(0,Math.round(clearanceAt(ship).gap/SCALE));
  document.getElementById('fuelText').textContent=`${Math.round(ship.fuel)} / ${ship.fuelMax}`;
@@ -315,7 +324,7 @@ function drawShipReadouts(){
  ctx.lineTo(ex-dx/len*12,ey-dy/len*12);ctx.lineTo(ex,ey);ctx.stroke();
  ctx.fillStyle='rgba(8,14,28,.82)';ctx.fillRect(x,y,bw,bh);ctx.strokeRect(x,y,bw,bh);
  ctx.font='11px ui-monospace,monospace';ctx.textBaseline='middle';
- const gearStatus=Math.abs(s.gear.progress-s.gear.target)>.001?'MOVING':s.gear.progress>=.999?'DOWN':'UP';
+ const gearStatus=ApproachWarnings.gearStatus(s.gear);
  const rows=[
   ['SPEED',Math.hypot(s.vx,s.vy).toFixed(1)+' m/s','#dfe7ff'],
   ['VERT',s.vy.toFixed(1)+' m/s','#59c2ff'],
@@ -368,6 +377,7 @@ function drawTrajectory(){
 
 function drawLandingGear(s){
  const p=s.gear.progress;
+ if(p<=.001)return;
  ctx.lineWidth=2;
  for(const leg of s.gear.legs){
   const x=leg.side*(11+8*p),y=8+20*p-leg.compression;
@@ -394,6 +404,7 @@ function drawShip(){
 }
 
 function showScreen(html){
+ ApproachWarnings.render(approachAlertEl,approachState,false);
  document.getElementById('screenCard').innerHTML=html;
  screenEl.style.display='flex';
  screenEl.classList.remove('hidden');
@@ -417,6 +428,7 @@ function showTitle(){
   <h2>Flight controls</h2>
   <p><kbd>W</kbd>/<kbd>&uarr;</kbd> main engine &nbsp; <kbd>A</kbd>/<kbd>D</kbd> RCS &nbsp; <kbd>Q</kbd>/<kbd>E</kbd> rotate</p>
   <p><kbd>G</kbd> landing gear &nbsp; <kbd>H</kbd> flight callout &nbsp; <kbd>T</kbd> coasting trajectory (engines off)</p>
+  <p>Missions start with gear up. Deploy with G before touchdown. Approach callouts are visual only, in metres.</p>
   <p>Buy fuel manually in the hangar. Unused fuel carries across missions and retries.</p>
   <p>Deploy both feet and let the suspension settle on the pad to complete a landing.</p>
   <p>Land gently on the pad, preserve fuel, protect passengers, and arrive quickly.</p>

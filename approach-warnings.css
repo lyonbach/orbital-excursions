@@ -1,0 +1,6 @@
+.approach-alert{position:absolute;left:50%;bottom:24px;transform:translateX(-50%);box-sizing:border-box;max-width:calc(100vw - 28px);padding:10px 18px;border:1px solid currentColor;border-radius:7px;background:rgba(4,7,15,.94);color:#dfe7ff;text-align:center;font-size:14px;line-height:1.4;letter-spacing:1px;pointer-events:none;z-index:5}
+.approach-alert.callout{color:#a9dfff}
+.approach-alert.caution{color:#ffd166}
+.approach-alert.critical{color:#ff7b72;animation:gear-warning-pulse 1s ease-in-out infinite}
+@keyframes gear-warning-pulse{0%,100%{opacity:1}50%{opacity:.7}}
+@media(prefers-reduced-motion:reduce){.approach-alert.critical{animation:none}}
