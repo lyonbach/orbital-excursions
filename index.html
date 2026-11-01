@@ -100,9 +100,11 @@ function loadSave(){
 function persist(){localStorage.setItem(SAVE_KEY,JSON.stringify(save));}
 
 const keys={};
+let showFlightInstruments=true;
 addEventListener('keydown',e=>{
  keys[e.code]=true;
  if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space'].includes(e.code))e.preventDefault();
+ if(e.code==='KeyH')showFlightInstruments=!showFlightInstruments;
  if(e.code==='Escape'&&(state==='missions'||state==='hangar'))showTitle();
 });
 addEventListener('keyup',e=>keys[e.code]=false);
@@ -266,8 +268,10 @@ function draw(){
   ctx.fillRect(p.x+8+i*((p.w-16)/4)-2,p.y-4,5,5);
  }
  drawShip();
- drawShipReadouts();
- drawVectors();
+ if(showFlightInstruments){
+  drawShipReadouts();
+  drawVectors();
+ }
  document.getElementById('time').textContent=missionTime.toFixed(1);
  document.getElementById('alt').textContent=Math.max(0,Math.round((terrainYAt(ship.x)-ship.y-18)/SCALE));
  document.getElementById('vs').textContent=ship.vy.toFixed(1);
@@ -393,7 +397,7 @@ function showTitle(){
    <button type="button" onclick="resetSave()" class="small">Reset progress</button>
   </div>
   <h2>Flight controls</h2>
-  <p><kbd>W</kbd>/<kbd>&uarr;</kbd> main engine &nbsp; <kbd>A</kbd>/<kbd>D</kbd> RCS &nbsp; <kbd>Q</kbd>/<kbd>E</kbd> rotate</p>
+  <p><kbd>W</kbd>/<kbd>&uarr;</kbd> main engine &nbsp; <kbd>A</kbd>/<kbd>D</kbd> RCS &nbsp; <kbd>Q</kbd>/<kbd>E</kbd> rotate &nbsp; <kbd>H</kbd> instruments</p>
   <p>Land gently on the pad, preserve fuel, protect passengers, and arrive quickly.</p>
  `);
 }
