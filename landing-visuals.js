@@ -165,6 +165,7 @@
   ctx.beginPath();ctx.ellipse(x,mastY,2,7,0,0,Math.PI*2);ctx.stroke();
   ctx.restore();
  };
+ let highGShake=0,lastVisualTime=clock(),previousShip=null;
  draw=function(){
   const now=clock(),dt=Math.min(.1,Math.max(0,now-lastVisualTime));
   lastVisualTime=now;
