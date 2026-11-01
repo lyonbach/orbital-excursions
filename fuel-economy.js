@@ -1,5 +1,5 @@
 const FuelEconomy=(()=>{
- const price=2;
+ const price=3;
  const nonnegative=(v,fallback=0)=>Number.isFinite(v)?Math.max(0,v):fallback;
  const cents=v=>Math.round(v*100)/100;
  const money=v=>v.toFixed(2);
@@ -69,7 +69,7 @@ const FuelEconomy=(()=>{
 })();
 
 const RepairShop=(()=>{
- const price=3,epsilon=1e-6;
+ const price=4.5,epsilon=1e-6;
  const capacity=s=>100+15*s.upgrades.hull;
  const money=v=>v.toFixed(2);
  function quote(s,request){
