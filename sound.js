@@ -71,7 +71,7 @@ const FlightSound=(()=>{
   latchClick(now,deploying?1:.8,deploying?1:1.18);
   latchClick(now+.07,deploying?.75:.6,deploying?.82:.95);
   const motor=audio.createOscillator(),motorGain=audio.createGain(),motorFilter=audio.createBiquadFilter();
-  motor.type='sawtooth';motor.frequency.setValueAtTime(deploying?54:71,now+.09);
+  motor.type='square';motor.frequency.setValueAtTime(deploying?54:71,now+.09);
   motor.frequency.linearRampToValueAtTime(deploying?49:66,now+duration);
   motorFilter.type='lowpass';motorFilter.frequency.value=340;motorFilter.Q.value=.8;
   motorGain.gain.setValueAtTime(0,now+.09);
