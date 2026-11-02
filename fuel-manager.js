@@ -1,4 +1,4 @@
-const FuelEconomy = (() => {
+const FuelManager = (() => {
     const price = 60;
     const nonnegative = (v, fallback = 0) => Number.isFinite(v) ? Math.max(0, v) : fallback;
     const cents = v => Math.round(v * 100) / 100;
@@ -57,7 +57,13 @@ const FuelEconomy = (() => {
         s.fuel += amount; s.debt = cents(s.debt + cost);
         return { units: amount, cost };
     }
+    function addBonusFuel(ship) {
+        if (ship && ship.fuelMax) {
+            ship.fuel = Math.min(ship.fuelMax, ship.fuel + ship.fuelMax * .25);
+        }
+    }
     function settle(s, gross) {
+
         gross = cents(nonnegative(gross));
         const repaid = Math.min(s.debt, gross), net = cents(gross - repaid);
         s.debt = cents(s.debt - repaid); s.credits = cents(s.credits + net);
@@ -85,7 +91,7 @@ const FuelEconomy = (() => {
    <p class="small">Available only with an empty tank and less than ${price} cr. Further emergency loans remain available if stranded again.</p>
   </div>`;
     }
-    return { price, fresh, migrate, capacity, quote, purchase, canBorrow, borrow, settle, panel, money };
+    return { price, fresh, migrate, capacity, quote, purchase, canBorrow, borrow, addBonusFuel, settle, panel, money };
 })();
 
 const RepairShop = (() => {

@@ -239,7 +239,7 @@ const LevelDesign=(()=>{
  const done=id=>save.completed.includes(id);
  function destinationOpen(d){return !d.previous||done(d.previous)||MISSIONS.some(m=>m.destination===d.id&&done(m.id));}
  function missionOpen(m){const d=destinations.find(d=>d.id===m.destination);return !!d&&destinationOpen(d)&&(!m.requires||done(m.requires)||done(m.id));}
- const resources=()=>`Credits: ${FuelEconomy.money(save.credits)} cr · Fuel ${save.fuel.toFixed(2)} / ${maxFuel()} · Hull ${save.hull.toFixed(2)} / ${maxHull()}`;
+ const resources=()=>`Credits: ${FuelManager.money(save.credits)} cr · Fuel ${save.fuel.toFixed(2)} / ${maxFuel()} · Hull ${save.hull.toFixed(2)} / ${maxHull()}`;
  function showDestinations(){
   state='missions';
   const cards=destinations.map(d=>{
