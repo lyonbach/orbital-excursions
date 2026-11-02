@@ -232,8 +232,9 @@
   updateWindParticles(dt,T);
   drawDust();
   if(showTrajectory&&state==='play')drawTrajectory();
-  drawShip();
+  if(state==='play')drawShip();
   if(showFlightInstruments&&state==='play')drawShipReadouts();
+  drawExplosions();
   ctx.restore();
    ApproachWarnings.render(approachAlertEl,approachState,state==='play');
    const gearStatusEl=document.getElementById('gearStatus');

@@ -80,6 +80,8 @@ let approachState = null;
 let dustParticles = [];
 let resultDelay = 0;
 let cameraShake = 0;
+let explosions = [];
+let explosionBursts = [];
 const screenEl = document.getElementById('screen'), envEl = document.getElementById('env');
 const approachAlertEl = document.getElementById('approachAlerts');
 function flushFlightResources() { if (state === 'play' && ship) { save.fuel = ship.fuel; save.hull = ship.hull; persist(); resourceSaveElapsed = 0; } }
@@ -158,7 +160,72 @@ function updateDust(dt) {
     }
     dustParticles = dustParticles.filter(p => p.age < p.life);
 }
+
+function createExplosion(x, y, count = 60) {
+    explosionBursts.push({ x, y, age: 0, life: .45, radius: 24 + Math.sqrt(count) * 2.5 });
+    cameraShake = Math.max(cameraShake, Math.min(16, 5 + count / 18));
+    for (let i = 0; i < count; i++) {
+        const angle = Math.random() * Math.PI * 2;
+        const speed = 3 + Math.random() * 12;
+        const smoke = Math.random() < .28;
+        explosions.push({
+            x, y,
+            vx: Math.cos(angle) * speed,
+            vy: Math.sin(angle) * speed - (smoke ? 2 : 0),
+            life: smoke ? 1 + Math.random() * .8 : .45 + Math.random() * .7,
+            age: 0,
+            size: smoke ? 3 + Math.random() * 5 : 2 + Math.random() * 4,
+            smoke,
+            color: smoke ? '#4a5362' : ['#ff4e00', '#ff9000', '#ffd000', '#fff4bd'][Math.floor(Math.random() * 4)]
+        });
+    }
+}
+
+function updateExplosions(dt) {
+    for (const p of explosions) {
+        p.x += p.vx * SCALE * dt;
+        p.y += p.vy * SCALE * dt;
+        p.vy += (p.smoke ? -1.5 : 4.5) * dt;
+        p.vx *= Math.exp(-1.6 * dt);
+        p.age += dt;
+    }
+    explosions = explosions.filter(p => p.age < p.life);
+    for (const burst of explosionBursts) burst.age += dt;
+    explosionBursts = explosionBursts.filter(burst => burst.age < burst.life);
+}
+
+function drawExplosions() {
+    for (const burst of explosionBursts) {
+        const progress = burst.age / burst.life;
+        const radius = burst.radius * (0.25 + progress);
+        const glow = ctx.createRadialGradient(burst.x, burst.y, 0, burst.x, burst.y, radius);
+        glow.addColorStop(0, `rgba(255,245,190,${(1 - progress) * .9})`);
+        glow.addColorStop(.25, `rgba(255,125,0,${(1 - progress) * .55})`);
+        glow.addColorStop(1, 'rgba(255,70,0,0)');
+        ctx.fillStyle = glow;
+        ctx.beginPath();
+        ctx.arc(burst.x, burst.y, radius, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = (1 - progress) * .7;
+        ctx.strokeStyle = '#ffcb5c';
+        ctx.lineWidth = Math.max(1, 3 * (1 - progress));
+        ctx.beginPath();
+        ctx.arc(burst.x, burst.y, burst.radius * progress, 0, Math.PI * 2);
+        ctx.stroke();
+    }
+    for (const p of explosions) {
+        const progress = p.age / p.life;
+        ctx.globalAlpha = (1 - progress) * (p.smoke ? .55 : 1);
+        ctx.fillStyle = p.color;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.size * (p.smoke ? 1 + progress * 1.6 : 1 - progress * .45), 0, Math.PI * 2);
+        ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+}
+
 function drawDust() {
+
     for (const p of dustParticles) {
         ctx.globalAlpha = Math.max(0, 1 - p.age / p.life) * .8;
         ctx.fillStyle = '#c3d2e8';
@@ -243,7 +310,7 @@ function startMission(m) {
     ship = { x: 120, y: 120, vx: m.startVx, vy: 0, angle: 0, angVel: 0, fuel: save.fuel, fuelMax, hull: save.hull, hullMax: maxHull(), crew: 100, happiness: 100, thrusting: false, rcsL: false, rcsR: false, gVert: 0, gLat: 0, prevVx: 0, prevVy: 0, peakG: 0, gear: createLandingGear(), settleTime: 0, failureReason: '' };
     approachState = ApproachWarnings.create(Math.max(0, clearanceAt(ship).gap / SCALE));
     missionTime = 0; result = null; windPhase = 0; shipAccel = { x: 0, y: 0 }; resourceSaveElapsed = 0;
-    dustParticles = []; resultDelay = 0; cameraShake = 0;
+    dustParticles = []; explosions = []; explosionBursts = []; resultDelay = 0; cameraShake = 0;
     state = 'play';
     screenEl.style.display = 'none';
     screenEl.classList.add('hidden');
@@ -301,7 +368,13 @@ function update(dt) {
     if (resourceSaveElapsed >= 1) { persist(); resourceSaveElapsed = 0; }
 
     if (s.failureReason || s.hull <= 0 || s.crew <= 0) {
-        state = 'over'; result = calculatePayout(false); persist(); showResult(false); return;
+        if (s.hull <= 0) createExplosion(s.x, s.y, 150);
+        else createExplosion(s.x, s.y);
+        state = 'over';
+        resultDelay = 2;
+        result = calculatePayout(false);
+        persist();
+        return;
     }
     ApproachWarnings.update(approachState, s, Math.max(0, clearanceAt(s).gap / SCALE), dt);
     const pad = terrain.pad;
@@ -356,8 +429,9 @@ function draw() {
     drawWindsock(selectedMission);
     drawDust();
     if (showTrajectory && state === 'play') drawTrajectory();
-    drawShip();
+    if (state === 'play') drawShip();
     if (showFlightInstruments && state === 'play') drawShipReadouts();
+    drawExplosions();
     ctx.restore();
     ApproachWarnings.render(approachAlertEl, approachState, state === 'play');
     const gearStatusEl = document.getElementById('gearStatus');
@@ -666,7 +740,11 @@ function loop(now) {
         resultDelay -= dt;
         updateDust(dt);
         if (resultDelay <= 0) showResult(true);
+    } else if (state === 'over' && resultDelay > 0) {
+        resultDelay -= dt;
+        if (resultDelay <= 0) showResult(false);
     }
+    updateExplosions(dt);
     cameraShake *= Math.exp(-5 * dt);
     if (ship && (state === 'play' || state === 'won' || state === 'over')) draw();
     requestAnimationFrame(loop);
