@@ -69,7 +69,12 @@ addEventListener('keydown', e => {
     if (!e.repeat && !e.ctrlKey && !e.metaKey && !e.altKey && state === 'play') {
         if (e.code === 'KeyH') { e.preventDefault(); showFlightInstruments = !showFlightInstruments; }
         if (e.code === 'KeyT') { e.preventDefault(); showTrajectory = !showTrajectory; }
-        if (e.code === 'KeyG') { e.preventDefault(); ship.gear.target = 1 - ship.gear.target; ship.settleTime = 0; }
+        if (e.code === 'KeyG') {
+            e.preventDefault();
+            ship.gear.target = 1 - ship.gear.target;
+            ship.settleTime = 0;
+            playFlightSound('gearStart', ship.gear.target === 1);
+        }
     }
     if (e.code === 'Escape' && (state === 'missions' || state === 'hangar')) showTitle();
 });
@@ -84,6 +89,9 @@ let explosions = [];
 let explosionBursts = [];
 const screenEl = document.getElementById('screen'), envEl = document.getElementById('env');
 const approachAlertEl = document.getElementById('approachAlerts');
+function playFlightSound(method, ...args) {
+    if (typeof FlightSound !== 'undefined' && typeof FlightSound[method] === 'function') FlightSound[method](...args);
+}
 function flushFlightResources() { if (state === 'play' && ship) { save.fuel = ship.fuel; save.hull = ship.hull; persist(); resourceSaveElapsed = 0; } }
 addEventListener('pagehide', flushFlightResources);
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') flushFlightResources(); });
@@ -149,6 +157,7 @@ function spawnDust(x, y, speed, side) {
             size: 1.5 + Math.random() * 3.5
         });
     }
+    playFlightSound('impact', speed);
 }
 function updateDust(dt) {
     for (const p of dustParticles) {
@@ -331,7 +340,10 @@ function update(dt) {
     t += dt; missionTime += dt; windPhase += dt;
     const s = ship, m = selectedMission;
     s.prevVx = s.vx; s.prevVy = s.vy;
-    s.gear.progress += Math.max(-dt / LANDING.deployTime, Math.min(dt / LANDING.deployTime, s.gear.target - s.gear.progress));
+    const gearProgress = s.gear.progress, gearTarget = s.gear.target;
+    s.gear.progress += Math.max(-dt / LANDING.deployTime, Math.min(dt / LANDING.deployTime, gearTarget - gearProgress));
+    if (gearTarget === 1 && gearProgress < .999 && s.gear.progress >= .999) playFlightSound('gearLock', 1.2, true);
+    if (gearTarget === 0 && gearProgress > .001 && s.gear.progress <= .001) playFlightSound('gearLock', .9, false);
 
     const commands = ThrusterPhysics.prepare(s, {
         main: !!(keys.KeyW || keys.ArrowUp), left: !!(keys.KeyA || keys.ArrowLeft),

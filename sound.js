@@ -1,6 +1,6 @@
 const FlightSound = (() => {
     let audio, master, engineGain, rcsGain, rumbleGain, failed = false, ready = false;
-    let muted = false, volume = .35, tail = 0, lastContact = -Infinity, trackedShip = null;
+    let muted = false, volume = .35, tail = 0, lastContact = -Infinity;
     const voices = new Set();
     const panel = document.createElement('div');
     panel.style.cssText = 'position:fixed;right:12px;bottom:12px;z-index:1000;display:flex;align-items:center;gap:8px;padding:8px 12px;background:#080e1ce8;border:1px solid #40516b;border-radius:8px;color:#dfe7ff;font:12px monospace';
@@ -212,39 +212,16 @@ const FlightSound = (() => {
         if (action.includes('repairHull') || action.includes('borrowEmergencyRepair')) { repair(); return; }
         uiClick();
     });
-    const originalStartMission = startMission;
-    startMission = function (mission) {
-        originalStartMission(mission);
-        FuelManager.addBonusFuel(ship);
-    };
-    const originalUpdate = update;
-    update = function (dt) {
-        const current = ship, playing = state === 'play' && current && dt > 0;
-        if (current !== trackedShip) { trackedShip = current; lastContact = -Infinity; }
-        const before = playing ? current.gear.progress : 0;
-        const target = playing ? current.gear.target : 0;
-        originalUpdate(dt);
-        updateMusic();
-        if (!playing || ship !== current) return;
-        const after = current.gear.progress;
-        if (target === 1 && before < .999 && after >= .999) gearLock(1.2, true);
-        if (target === 0 && before > .001 && after <= .001) gearLock(.9, false);
-    };
-    addEventListener('keydown', event => {
-        if (event.code !== 'KeyG' || event.repeat || event.ctrlKey || event.metaKey || event.altKey || state !== 'play' || !ship) return;
-        const target = event.target; if (target && (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName))) return;
-        gearStart(ship.gear.target === 1);
-    });
-    const originalDust = spawnDust;
-    spawnDust = function (x, y, speed, side) {
-        originalDust(x, y, speed, side);
+    function impact(speed) {
         if (state !== 'play' || !ship) return;
-        if (ship !== trackedShip) { trackedShip = ship; lastContact = -Infinity; }
+        if (missionTime < lastContact) lastContact = -Infinity;
         if (missionTime - lastContact < .12) return;
-        lastContact = missionTime; effect(true, Math.min(1, Math.max(0, speed) / 8.5));
-    };
+        lastContact = missionTime;
+        effect(true, Math.min(1, Math.max(0, speed) / 8.5));
+    }
     
     function tick() {
+        updateMusic();
         if (audio && !failed) {
             const enabled = !muted && !document.hidden && document.hasFocus();
             const active = enabled && typeof state !== 'undefined' && state === 'play' && typeof ship !== 'undefined' && ship;
@@ -258,5 +235,5 @@ const FlightSound = (() => {
         }
         requestAnimationFrame(tick);
     }
-    requestAnimationFrame(tick); return { silence };
+    requestAnimationFrame(tick); return { silence, gearStart, gearLock, impact };
 })();

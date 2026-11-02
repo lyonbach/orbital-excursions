@@ -57,11 +57,6 @@ const FuelManager = (() => {
         s.fuel += amount; s.debt = cents(s.debt + cost);
         return { units: amount, cost };
     }
-    function addBonusFuel(ship) {
-        if (ship && ship.fuelMax) {
-            ship.fuel = Math.min(ship.fuelMax, ship.fuel + ship.fuelMax * .25);
-        }
-    }
     function settle(s, gross) {
 
         gross = cents(nonnegative(gross));
@@ -91,7 +86,7 @@ const FuelManager = (() => {
    <p class="small">Available only with an empty tank and less than ${price} cr. Further emergency loans remain available if stranded again.</p>
   </div>`;
     }
-    return { price, fresh, migrate, capacity, quote, purchase, canBorrow, borrow, addBonusFuel, settle, panel, money };
+    return { price, fresh, migrate, capacity, quote, purchase, canBorrow, borrow, settle, panel, money };
 })();
 
 const RepairShop = (() => {
