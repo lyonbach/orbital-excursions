@@ -441,7 +441,7 @@ function draw() {
     drawWindsock(selectedMission);
     drawDust();
     if (showTrajectory && state === 'play') drawTrajectory();
-    if (state === 'play') drawShip();
+    if (state !== 'over') drawShip();
     if (showFlightInstruments && state === 'play') drawShipReadouts();
     drawExplosions();
     ctx.restore();
