@@ -8,7 +8,7 @@ const FuelManager = (() => {
 
     function fresh() {
         return {
-            credits: 200,
+            credits: 1000,
             fuel: 0,
             hull: 100,
             debt: 0,
