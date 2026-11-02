@@ -94,7 +94,7 @@ const RepairShop=(()=>{
   if(!canBorrow(s))return false;
   const amount=Math.max(0,capacity(s)*.5-s.hull);
   const cost=Math.ceil(amount*price*100-1e-7)/100;
-  s.hull+=amount;s.debt=Math.round((s.debt+cost*100)/100);
+  s.hull+=amount;s.debt=cents(s.debt+cost);
   return {amount,cost};
  }
  function panel(s){
@@ -108,7 +108,7 @@ const RepairShop=(()=>{
   const loanCost=Math.ceil(cap*.5*price*100)/100;
   return `<div class="upgrade"><h3>Repair shop</h3>
    <p>Hull: ${s.hull.toFixed(2)} / ${cap} — ${Math.round(s.hull/cap*100)}%</p>
-   <div class="bar"><div class="fill" style="width:${s.fuel/cap*100}%;background:#59c2ff"></div></div>
+   <div class="bar"><div class="fill" style="width:${s.hull/cap*100}%;background:#7ee787"></div></div>
    <p class="${s.hull<=epsilon?'bad':missing<=epsilon?'good':'warn'}">${condition}</p>
    <p class="small">${price} cr per hull point. Repair costs round up to the nearest 0.01 cr. Damage carries across missions, retries, and reloads. Hull upgrades add capacity, not repairs.</p>
    <div class="row">${buttons}</div>
