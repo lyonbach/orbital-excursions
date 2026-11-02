@@ -58,7 +58,7 @@ const LevelDesign=(()=>{
   id:'jupiter-float',
   name:'Cloud Station Approach',
   fare:1150,
-  gravity:8.2,
+   gravity:20,
   padWidth:105,
   roughness:1,
   wind:8,
@@ -75,7 +75,7 @@ const LevelDesign=(()=>{
   id:'jupiter-drift',
   name:'Drifting Terminal',
   fare:1450,
-  gravity:8.2,
+   gravity:20,
   padWidth:95,
   roughness:1,
   wind:12,
@@ -93,7 +93,7 @@ const LevelDesign=(()=>{
   id:'jupiter-storm',
   name:'Storm Anchor',
   fare:1750,
-  gravity:8.2,
+   gravity:20,
   padWidth:100,
   roughness:1,
   wind:13,
@@ -111,7 +111,7 @@ const LevelDesign=(()=>{
   id:'jupiter-brass',
   name:'Brass Relay',
   fare:2050,
-  gravity:8.2,
+   gravity:20,
   padWidth:90,
   roughness:1,
   wind:14,
@@ -129,7 +129,7 @@ const LevelDesign=(()=>{
   id:'jupiter-copper',
   name:'Copper Crossing',
   fare:2350,
-  gravity:8.2,
+   gravity:20,
   padWidth:85,
   roughness:1,
   wind:14,
@@ -147,7 +147,7 @@ const LevelDesign=(()=>{
   id:'jupiter-high',
   name:'High Balloon Dock',
   fare:2650,
-  gravity:8.2,
+   gravity:20,
   padWidth:90,
   roughness:1,
   wind:15,
@@ -165,7 +165,7 @@ const LevelDesign=(()=>{
   id:'jupiter-gust',
   name:'Gust Line',
   fare:2950,
-  gravity:8.2,
+   gravity:20,
   padWidth:80,
   roughness:1,
   wind:17,
@@ -183,7 +183,7 @@ const LevelDesign=(()=>{
   id:'jupiter-rivet',
   name:'Rivet Yard',
   fare:3250,
-  gravity:8.2,
+   gravity:20,
   padWidth:75,
   roughness:1,
   wind:18,
@@ -201,7 +201,7 @@ const LevelDesign=(()=>{
   id:'jupiter-tempest',
   name:'Tempest Terminal',
   fare:3600,
-  gravity:8.2,
+   gravity:20,
   padWidth:70,
   roughness:1,
   wind:19,
@@ -219,7 +219,7 @@ const LevelDesign=(()=>{
   id:'jupiter-zeppelin',
   name:'Zeppelin Grand Terminal',
   fare:4000,
-  gravity:8.2,
+   gravity:20,
   padWidth:65,
   roughness:1,
   wind:20,
@@ -237,9 +237,9 @@ const LevelDesign=(()=>{
  roots.push(jupiterFloat);
  destinations.push({id:'jupiter',name:'Jupiter',intro:'jupiter-float',previous:'io',environment:jupiterEnvironment,gravity:jupiterFloat.gravity,drag:jupiterFloat.drag,wind:jupiterFloat.wind});
  const done=id=>save.completed.includes(id);
- function destinationOpen(d){return !d.previous||done(d.previous)||MISSIONS.some(m=>m.destination===d.id&&done(m.id));}
- function missionOpen(m){const d=destinations.find(d=>d.id===m.destination);return !!d&&destinationOpen(d)&&(!m.requires||done(m.requires)||done(m.id));}
- const resources=()=>`Credits: ${FuelEconomy.money(save.credits)} cr · Fuel ${save.fuel.toFixed(2)} / ${maxFuel()} · Hull ${save.hull.toFixed(2)} / ${maxHull()}`;
+ function destinationOpen(d){return allLevelsUnlocked||!d.previous||done(d.previous)||MISSIONS.some(m=>m.destination===d.id&&done(m.id));}
+ function missionOpen(m){if(!m)return false;const d=destinations.find(d=>d.id===m.destination);return allLevelsUnlocked||!!d&&destinationOpen(d)&&(!m.requires||done(m.requires)||done(m.id));}
+ const resources=()=>`Credits: ${FuelManager.money(save.credits)} cr · Fuel ${save.fuel.toFixed(2)} / ${maxFuel()} · Hull ${save.hull.toFixed(2)} / ${maxHull()}`;
  function showDestinations(){
   state='missions';
   const cards=destinations.map(d=>{
@@ -253,7 +253,7 @@ const LevelDesign=(()=>{
   if(!d||!destinationOpen(d)){showDestinations();return;}
   state='missions';
   const cards=MISSIONS.filter(m=>m.destination===id).map(m=>{
-   const open=missionOpen(m),operable=save.hull>1e-6,fueled=save.fuel>1e-6;
+   const open=missionOpen(m),operable=save.hull>1e-6,fueled=allLevelsUnlocked||save.fuel>1e-6;
    const label=!open?'LOCKED':!operable?'REPAIR IN HANGAR':!fueled?'REFUEL IN HANGAR':'LAUNCH';
    const prerequisite=m.requires?MISSIONS.find(v=>v.id===m.requires):null;
    return `<div class="mission"><h3>${m.name}${done(m.id)?' — COMPLETED':''}</h3><p>${m.description}</p><p class="small">Fare ${m.fare} cr · ${m.layout?'Handcrafted terrain':m.platform?'Floating platform':'Original approach'}</p>${!open&&prerequisite?`<p class="small">Complete ${prerequisite.name} to unlock.</p>`:''}<button type="button" ${open&&operable&&fueled?'':'disabled'} onclick="startMissionById('${m.id}')">${label}</button></div>`;

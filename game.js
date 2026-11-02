@@ -9,6 +9,7 @@ const BASE_FARE = 500, FUEL_BONUS_MAX = 500, HAPPINESS_RATE = 5;
 const TARGET_TIME = 90, SPEED_BONUS_RATE = 10, SPEED_BONUS_MAX = 900;
 const SAVE_KEY = 'orbitalExcursionsSave_v1';
 const LANDING = { deployTime: 2, travel: 10, spring: 24, damper: 5.5, settleTime: .65, crashSpeed: 8.5 };
+const allLevelsUnlocked = new URLSearchParams(window.location.search).get('lyonbach') === '1';
 
 const MISSIONS = [
     {
@@ -18,19 +19,19 @@ const MISSIONS = [
         }
     },
     {
-        id: 'mars', name: 'Mars Express', fare: 900, gravity: 5.5, padWidth: 120, roughness: 1.25, wind: 0, drag: .015, startVx: 26, startFuel: .9, description: 'Low gravity, but a faster approach and a tighter landing zone.', unlockAt: 1,
+        id: 'mars', name: 'Mars Express', fare: 900, gravity: 3.72, padWidth: 120, roughness: 1.25, wind: 0, drag: .015, startVx: 26, startFuel: .9, description: 'Low gravity, but a faster approach and a tighter landing zone.', unlockAt: 1,
         environment: {
             title: 'Mars', body: 'Fourth planet from the Sun', diameter: '6,779 km', gravity: '3.72 m/s² (38% of Earth)', atmosphere: 'Thin-air aerobraking, dust, low pressure, and elevated radiation exposure.', temperature: 'Approximately −153 °C to 20 °C.', hazards: 'Thin-air aerobraking, dust, low pressure, and elevated radiation exposure.', source: 'Mars', url: 'https://en.wikipedia.org/wiki/Mars'
         }
     },
     {
-        id: 'titan', name: 'Titan Charter', fare: 1400, gravity: 2.8, padWidth: 105, roughness: 1.5, wind: 7, drag: .09, startVx: 30, startFuel: .85, description: 'Thick atmosphere, crosswinds, and a narrow pad.', unlockAt: 2,
+        id: 'titan', name: 'Titan Charter', fare: 1400, gravity: 1.35, padWidth: 105, roughness: 1.5, wind: 7, drag: .09, startVx: 30, startFuel: .85, description: 'Thick atmosphere, crosswinds, and a narrow pad.', unlockAt: 2,
         environment: {
             title: 'Titan', body: 'Largest moon of Saturn', diameter: '5,149 km', gravity: '1.352 m/s² (13.8% of Earth)', atmosphere: 'Dense nitrogen atmosphere with methane; surface pressure exceeds Earth’s.', temperature: 'About −179.5 °C.', hazards: 'Methane weather, hydrocarbon lakes, dense haze, and strong atmospheric drag.', source: 'Titan (moon)', url: 'https://en.wikipedia.org/wiki/Titan_(moon)'
         }
     },
     {
-        id: 'io', name: 'Io Emergency', fare: 2200, gravity: 12.5, padWidth: 95, roughness: 1.8, wind: 11, drag: .002, startVx: 34, startFuel: .8, description: 'High gravity, radiation gusts, and almost no margin for error.', unlockAt: 3,
+        id: 'io', name: 'Io Emergency', fare: 2200, gravity: 1.80, padWidth: 95, roughness: 1.8, wind: 11, drag: .002, startVx: 34, startFuel: .8, description: 'High gravity, radiation gusts, and almost no margin for error.', unlockAt: 3,
         environment: {
             title: 'Io', body: 'Innermost Galilean moon of Jupiter', diameter: 'About 3,642 km', gravity: '1.796 m/s² (18.3% of Earth)', atmosphere: 'Extremely thin, dominated by sulfur dioxide.', temperature: 'Cold surface, with intense local heating around volcanic features.', hazards: 'Extreme volcanism, sulfur compounds, radiation and tidal gusts, with negligible aerodynamic drag.', source: 'Io (moon)', url: 'https://en.wikipedia.org/wiki/Io_(moon)'
         }
@@ -44,7 +45,7 @@ const UPGRADES = {
     rcs: { name: 'RCS Thrusters', levels: [0, 300, 700, 1300], effect: l => `Lateral thrust ${6 + 1.5 * l}`, desc: 'Improves sideways correction without rotating.' }
 };
 
-if (typeof FuelEconomy === 'undefined' || typeof RepairShop === 'undefined') {
+if (typeof FuelManager === 'undefined' || typeof RepairShop === 'undefined') {
     throw new Error('Orbital Excursions: economy modules did not load. Hard-refresh with cache disabled; do not reset progress.');
 }
 
@@ -52,9 +53,9 @@ let save = loadSave(), resourceSaveElapsed = 0;
 function loadSave() {
     try {
         const raw = localStorage.getItem(SAVE_KEY);
-        if (raw) return FuelEconomy.migrate(JSON.parse(raw));
+        if (raw) return FuelManager.migrate(JSON.parse(raw));
     } catch (e) { }
-    return FuelEconomy.fresh();
+    return FuelManager.fresh();
 }
 function persist() { localStorage.setItem(SAVE_KEY, JSON.stringify(save)); }
 persist();
@@ -69,7 +70,12 @@ addEventListener('keydown', e => {
     if (!e.repeat && !e.ctrlKey && !e.metaKey && !e.altKey && state === 'play') {
         if (e.code === 'KeyH') { e.preventDefault(); showFlightInstruments = !showFlightInstruments; }
         if (e.code === 'KeyT') { e.preventDefault(); showTrajectory = !showTrajectory; }
-        if (e.code === 'KeyG') { e.preventDefault(); ship.gear.target = 1 - ship.gear.target; ship.settleTime = 0; }
+        if (e.code === 'KeyG') {
+            e.preventDefault();
+            ship.gear.target = 1 - ship.gear.target;
+            ship.settleTime = 0;
+            playFlightSound('gearStart', ship.gear.target === 1);
+        }
     }
     if (e.code === 'Escape' && (state === 'missions' || state === 'hangar')) showTitle();
 });
@@ -80,8 +86,13 @@ let approachState = null;
 let dustParticles = [];
 let resultDelay = 0;
 let cameraShake = 0;
+let explosions = [];
+let explosionBursts = [];
 const screenEl = document.getElementById('screen'), envEl = document.getElementById('env');
 const approachAlertEl = document.getElementById('approachAlerts');
+function playFlightSound(method, ...args) {
+    if (typeof FlightSound !== 'undefined' && typeof FlightSound[method] === 'function') FlightSound[method](...args);
+}
 function flushFlightResources() { if (state === 'play' && ship) { save.fuel = ship.fuel; save.hull = ship.hull; persist(); resourceSaveElapsed = 0; } }
 addEventListener('pagehide', flushFlightResources);
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') flushFlightResources(); });
@@ -97,7 +108,7 @@ function makeTerrain(m) {
     return { pts, pad: { x: px, w: pw, y: py } };
 }
 
-function maxFuel() { return FuelEconomy.capacity(save); }
+function maxFuel() { return FuelManager.capacity(save); }
 function maxHull() { return RepairShop.capacity(save); }
 function enginePower() { return 26 + 3 * save.upgrades.engine; }
 function rcsPower() { return 6 + 1.5 * save.upgrades.rcs; }
@@ -147,6 +158,7 @@ function spawnDust(x, y, speed, side) {
             size: 1.5 + Math.random() * 3.5
         });
     }
+    playFlightSound('impact', speed);
 }
 function updateDust(dt) {
     for (const p of dustParticles) {
@@ -158,7 +170,72 @@ function updateDust(dt) {
     }
     dustParticles = dustParticles.filter(p => p.age < p.life);
 }
+
+function createExplosion(x, y, count = 60) {
+    explosionBursts.push({ x, y, age: 0, life: .45, radius: 24 + Math.sqrt(count) * 2.5 });
+    cameraShake = Math.max(cameraShake, Math.min(16, 5 + count / 18));
+    for (let i = 0; i < count; i++) {
+        const angle = Math.random() * Math.PI * 2;
+        const speed = 3 + Math.random() * 12;
+        const smoke = Math.random() < .28;
+        explosions.push({
+            x, y,
+            vx: Math.cos(angle) * speed,
+            vy: Math.sin(angle) * speed - (smoke ? 2 : 0),
+            life: smoke ? 1 + Math.random() * .8 : .45 + Math.random() * .7,
+            age: 0,
+            size: smoke ? 3 + Math.random() * 5 : 2 + Math.random() * 4,
+            smoke,
+            color: smoke ? '#4a5362' : ['#ff4e00', '#ff9000', '#ffd000', '#fff4bd'][Math.floor(Math.random() * 4)]
+        });
+    }
+}
+
+function updateExplosions(dt) {
+    for (const p of explosions) {
+        p.x += p.vx * SCALE * dt;
+        p.y += p.vy * SCALE * dt;
+        p.vy += (p.smoke ? -1.5 : 4.5) * dt;
+        p.vx *= Math.exp(-1.6 * dt);
+        p.age += dt;
+    }
+    explosions = explosions.filter(p => p.age < p.life);
+    for (const burst of explosionBursts) burst.age += dt;
+    explosionBursts = explosionBursts.filter(burst => burst.age < burst.life);
+}
+
+function drawExplosions() {
+    for (const burst of explosionBursts) {
+        const progress = burst.age / burst.life;
+        const radius = burst.radius * (0.25 + progress);
+        const glow = ctx.createRadialGradient(burst.x, burst.y, 0, burst.x, burst.y, radius);
+        glow.addColorStop(0, `rgba(255,245,190,${(1 - progress) * .9})`);
+        glow.addColorStop(.25, `rgba(255,125,0,${(1 - progress) * .55})`);
+        glow.addColorStop(1, 'rgba(255,70,0,0)');
+        ctx.fillStyle = glow;
+        ctx.beginPath();
+        ctx.arc(burst.x, burst.y, radius, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = (1 - progress) * .7;
+        ctx.strokeStyle = '#ffcb5c';
+        ctx.lineWidth = Math.max(1, 3 * (1 - progress));
+        ctx.beginPath();
+        ctx.arc(burst.x, burst.y, burst.radius * progress, 0, Math.PI * 2);
+        ctx.stroke();
+    }
+    for (const p of explosions) {
+        const progress = p.age / p.life;
+        ctx.globalAlpha = (1 - progress) * (p.smoke ? .55 : 1);
+        ctx.fillStyle = p.color;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.size * (p.smoke ? 1 + progress * 1.6 : 1 - progress * .45), 0, Math.PI * 2);
+        ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+}
+
 function drawDust() {
+
     for (const p of dustParticles) {
         ctx.globalAlpha = Math.max(0, 1 - p.age / p.life) * .8;
         ctx.fillStyle = '#c3d2e8';
@@ -235,15 +312,15 @@ function showEnvironment(m) {
 }
 
 function startMission(m) {
-    if (save.fuel <= 1e-6 || save.hull <= 1e-6) { showHangar(); return; }
+    if ((!allLevelsUnlocked && save.fuel <= 1e-6) || save.hull <= 1e-6) { showHangar(); return; }
     selectedMission = m;
     terrain = makeTerrain(m);
     stars = Array.from({ length: 170 }, () => ({ x: Math.random() * W, y: Math.random() * H * .72, r: Math.random() * 1.5 + .3, a: Math.random() * .7 + .2 }));
     const fuelMax = maxFuel();
-    ship = { x: 120, y: 120, vx: m.startVx, vy: 0, angle: 0, angVel: 0, fuel: save.fuel, fuelMax, hull: save.hull, hullMax: maxHull(), crew: 100, happiness: 100, thrusting: false, rcsL: false, rcsR: false, gVert: 0, gLat: 0, prevVx: 0, prevVy: 0, peakG: 0, gear: createLandingGear(), settleTime: 0, failureReason: '' };
+    ship = { x: 120, y: 120, vx: m.startVx, vy: 0, angle: 0, angVel: 0, fuel: allLevelsUnlocked ? fuelMax : save.fuel, fuelMax, hull: save.hull, hullMax: maxHull(), crew: 100, happiness: 100, thrusting: false, rcsL: false, rcsR: false, gVert: 0, gLat: 0, prevVx: 0, prevVy: 0, peakG: 0, gear: createLandingGear(), settleTime: 0, failureReason: '' };
     approachState = ApproachWarnings.create(Math.max(0, clearanceAt(ship).gap / SCALE));
     missionTime = 0; result = null; windPhase = 0; shipAccel = { x: 0, y: 0 }; resourceSaveElapsed = 0;
-    dustParticles = []; resultDelay = 0; cameraShake = 0;
+    dustParticles = []; explosions = []; explosionBursts = []; resultDelay = 0; cameraShake = 0;
     state = 'play';
     screenEl.style.display = 'none';
     screenEl.classList.add('hidden');
@@ -264,13 +341,16 @@ function update(dt) {
     t += dt; missionTime += dt; windPhase += dt;
     const s = ship, m = selectedMission;
     s.prevVx = s.vx; s.prevVy = s.vy;
-    s.gear.progress += Math.max(-dt / LANDING.deployTime, Math.min(dt / LANDING.deployTime, s.gear.target - s.gear.progress));
+    const gearProgress = s.gear.progress, gearTarget = s.gear.target;
+    s.gear.progress += Math.max(-dt / LANDING.deployTime, Math.min(dt / LANDING.deployTime, gearTarget - gearProgress));
+    if (gearTarget === 1 && gearProgress < .999 && s.gear.progress >= .999) playFlightSound('gearLock', 1.2, true);
+    if (gearTarget === 0 && gearProgress > .001 && s.gear.progress <= .001) playFlightSound('gearLock', .9, false);
 
     const commands = ThrusterPhysics.prepare(s, {
         main: !!(keys.KeyW || keys.ArrowUp), left: !!(keys.KeyA || keys.ArrowLeft),
         right: !!(keys.KeyD || keys.ArrowRight), ccw: !!keys.KeyQ, cw: !!keys.KeyE
     }, dt, enginePower() * (.55 + .45 * s.hull / s.hullMax), rcsPower());
-    s.jets = commands.jets; s.fuel = Math.max(0, s.fuel - commands.fuelUsed);
+    s.jets = commands.jets; s.fuel = allLevelsUnlocked ? s.fuelMax : Math.max(0, s.fuel - commands.fuelUsed);
     s.thrusting = commands.main; s.rcsL = commands.left; s.rcsR = commands.right;
 
     let ax = 0, ay = m.gravity;
@@ -301,7 +381,13 @@ function update(dt) {
     if (resourceSaveElapsed >= 1) { persist(); resourceSaveElapsed = 0; }
 
     if (s.failureReason || s.hull <= 0 || s.crew <= 0) {
-        state = 'over'; result = calculatePayout(false); persist(); showResult(false); return;
+        if (s.hull <= 0) createExplosion(s.x, s.y, 150);
+        else createExplosion(s.x, s.y);
+        state = 'over';
+        resultDelay = 2;
+        result = calculatePayout(false);
+        persist();
+        return;
     }
     ApproachWarnings.update(approachState, s, Math.max(0, clearanceAt(s).gap / SCALE), dt);
     const pad = terrain.pad;
@@ -314,7 +400,7 @@ function update(dt) {
     if (s.settleTime >= LANDING.settleTime) {
         state = 'won'; result = calculatePayout(true);
         if (!save.completed.includes(m.id)) save.completed.push(m.id);
-        const payment = FuelEconomy.settle(save, result.money);
+        const payment = FuelManager.settle(save, result.money);
         result.debtRepaid = payment.repaid; result.netMoney = payment.net;
         persist();
         resultDelay = 3;
@@ -356,22 +442,28 @@ function draw() {
     drawWindsock(selectedMission);
     drawDust();
     if (showTrajectory && state === 'play') drawTrajectory();
-    drawShip();
+    if (state !== 'over') drawShip();
     if (showFlightInstruments && state === 'play') drawShipReadouts();
+    drawExplosions();
     ctx.restore();
     ApproachWarnings.render(approachAlertEl, approachState, state === 'play');
     const gearStatusEl = document.getElementById('gearStatus');
     const status = ApproachWarnings.gearStatus(ship.gear);
     gearStatusEl.textContent = status;
     gearStatusEl.className = status === 'DOWN' ? 'good' : approachState && approachState.warning && approachState.warning.tone === 'critical' ? 'bad' : 'warn';
-    document.getElementById('time').textContent = missionTime.toFixed(1);
-    document.getElementById('alt').textContent = Math.max(0, Math.round(clearanceAt(ship).gap / SCALE));
-    document.getElementById('fuelText').textContent = `${Math.round(ship.fuel)} / ${ship.fuelMax}`;
-    document.getElementById('fuelFill').style.width = (ship.fuel / ship.fuelMax * 100) + '%';
-    document.getElementById('hullFill').style.width = (ship.hull / ship.hullMax * 100) + '%';
-    document.getElementById('crewFill').style.width = ship.crew + '%';
-    document.getElementById('happyFill').style.width = ship.happiness + '%';
+    updateHUD(ship);
 }
+
+function updateHUD(s) {
+    document.getElementById('time').textContent = missionTime.toFixed(1);
+    document.getElementById('alt').textContent = Math.max(0, Math.round(clearanceAt(s).gap / SCALE));
+    document.getElementById('fuelText').textContent = `${Math.round(s.fuel)} / ${s.fuelMax}`;
+    document.getElementById('fuelFill').style.width = (s.fuel / s.fuelMax * 100) + '%';
+    document.getElementById('hullFill').style.width = (s.hull / s.hullMax * 100) + '%';
+    document.getElementById('crewFill').style.width = s.crew + '%';
+    document.getElementById('happyFill').style.width = s.happiness + '%';
+}
+
 
 function drawWindsock(m) {
     if (m.wind <= 0) return;
@@ -557,8 +649,8 @@ function showTitle() {
     showScreen(`
   <h1>ORBITAL EXCURSIONS</h1>
   <p>You are Captain of a near-future tourism shuttle.</p>
-  <p>Credits: <span class="credits">${FuelEconomy.money(save.credits)}</span> &nbsp;|&nbsp; Missions completed: ${completed}/${MISSIONS.length}</p>
-  <p class="small">Fuel ${save.fuel.toFixed(2)} / ${maxFuel()} units · Hull ${save.hull.toFixed(2)} / ${maxHull()} · Debt ${FuelEconomy.money(save.debt)} cr</p>
+  <p>Credits: <span class="credits">${FuelManager.money(save.credits)}</span> &nbsp;|&nbsp; Missions completed: ${completed}/${MISSIONS.length}</p>
+  <p class="small">Fuel ${save.fuel.toFixed(2)} / ${maxFuel()} units · Hull ${save.hull.toFixed(2)} / ${maxHull()} · Debt ${FuelManager.money(save.debt)} cr</p>
   <div class="row" style="margin-top:18px">
    <button type="button" onclick="showMissions()">FLY</button>
    <button type="button" onclick="showHangar()">HANGAR</button>
@@ -576,9 +668,9 @@ function showTitle() {
 
 function showMissions() {
     state = 'missions';
-    const fueled = save.fuel > 1e-6, operable = save.hull > 1e-6;
+    const fueled = allLevelsUnlocked || save.fuel > 1e-6, operable = save.hull > 1e-6;
     const cards = MISSIONS.map((m, i) => {
-        const unlocked = i === 0 || save.completed.includes(MISSIONS[i - 1].id);
+        const unlocked = allLevelsUnlocked || i === 0 || save.completed.includes(MISSIONS[i - 1].id);
         const done = save.completed.includes(m.id);
         return `<div class="mission">
    <h3>${m.name} ${done ? '<span class="good">— COMPLETED</span>' : ''}</h3>
@@ -587,7 +679,7 @@ function showMissions() {
    <button type="button" ${unlocked && fueled && operable ? '' : "disabled"} onclick="startMissionById('${m.id}')">${!unlocked ? 'LOCKED' : !operable ? 'REPAIR IN HANGAR' : fueled ? 'LAUNCH' : 'REFUEL IN HANGAR'}</button>
   </div>`;
     }).join('');
-    showScreen(`<h1>MISSION SELECT</h1><p>Credits: <span class="credits">${FuelEconomy.money(save.credits)}</span> · Fuel ${save.fuel.toFixed(2)} / ${maxFuel()} · Hull ${save.hull.toFixed(2)} / ${maxHull()}</p>${cards}<div class="row"><button type="button" onclick="showHangar()">HANGAR / SERVICE</button><button type="button" onclick="showTitle()">BACK</button></div>`);
+    showScreen(`<h1>MISSION SELECT</h1><p>Credits: <span class="credits">${FuelManager.money(save.credits)}</span> · Fuel ${save.fuel.toFixed(2)} / ${maxFuel()} · Hull ${save.hull.toFixed(2)} / ${maxHull()}</p>${cards}<div class="row"><button type="button" onclick="showHangar()">HANGAR / SERVICE</button><button type="button" onclick="showTitle()">BACK</button></div>`);
 }
 
 function showHangar() {
@@ -603,7 +695,7 @@ function showHangar() {
    <button type="button" ${cost === null ? 'disabled' : affordable ? '' : 'disabled'} onclick="buyUpgrade('${id}')">${cost === null ? 'MAXED' : `UPGRADE — ${cost} cr`}</button>
   </div>`;
     }).join('');
-    showScreen(`<h1>HANGAR</h1><p>Available credits: <span class="credits">${FuelEconomy.money(save.credits)}</span></p>${RepairShop.panel(save)}${FuelEconomy.panel(save)}<h2>Upgrades</h2>${cards}<div class="row"><button type="button" onclick="showMissions()">MISSIONS</button><button type="button" onclick="showTitle()">BACK</button></div>`);
+    showScreen(`<h1>HANGAR</h1><p>Available credits: <span class="credits">${FuelManager.money(save.credits)}</span></p>${RepairShop.panel(save)}${FuelManager.panel(save)}<h2>Upgrades</h2>${cards}<div class="row"><button type="button" onclick="showMissions()">MISSIONS</button><button type="button" onclick="showTitle()">BACK</button></div>`);
 }
 
 function repairHull(amount) {
@@ -618,12 +710,12 @@ function borrowEmergencyRepair() {
 }
 function buyFuel(amount) {
     if (state !== 'hangar') return;
-    if (FuelEconomy.purchase(save, amount)) persist();
+    if (FuelManager.purchase(save, amount)) persist();
     showHangar();
 }
 function borrowEmergencyFuel() {
     if (state !== 'hangar') return;
-    if (FuelEconomy.borrow(save)) persist();
+    if (FuelManager.borrow(save)) persist();
     showHangar();
 }
 function startMissionById(id) { startMission(MISSIONS.find(m => m.id === id)); }
@@ -635,7 +727,7 @@ function buyUpgrade(id) {
     save.credits -= cost; save.upgrades[id]++; persist(); showHangar();
 }
 function resetSave() {
-    save = FuelEconomy.fresh(); persist(); showTitle();
+    save = FuelManager.fresh(); persist(); showTitle();
 }
 
 function showResult(success) {
@@ -645,12 +737,12 @@ function showResult(success) {
    <p>Mission time: ${missionTime.toFixed(1)} s</p>
    <p>Hull: ${Math.round(ship.hull / ship.hullMax * 100)}% &nbsp; Health: ${Math.round(ship.crew)}% &nbsp; Happiness: ${Math.round(ship.happiness)}%</p>
    <p>Mission fare: ${m.fare} cr<br>Fuel bonus: ${result.fuelBonus} cr<br>Happiness bonus: ${result.happinessBonus} cr<br>Speed bonus: ${result.speedBonus} cr</p>
-   <p>Gross earned: ${FuelEconomy.money(result.money)} cr<br>Debt repaid: ${FuelEconomy.money(result.debtRepaid)} cr<br><b>Added to balance: ${FuelEconomy.money(result.netMoney)} cr</b></p>
-   <p>Fuel remaining: ${save.fuel.toFixed(2)} / ${maxFuel()} units · Hull: ${save.hull.toFixed(2)} / ${maxHull()} · Debt remaining: ${FuelEconomy.money(save.debt)} cr</p>
+   <p>Gross earned: ${FuelManager.money(result.money)} cr<br>Debt repaid: ${FuelManager.money(result.debtRepaid)} cr<br><b>Added to balance: ${FuelManager.money(result.netMoney)} cr</b></p>
+   <p>Fuel remaining: ${save.fuel.toFixed(2)} / ${maxFuel()} units · Hull: ${save.hull.toFixed(2)} / ${maxHull()} · Debt remaining: ${FuelManager.money(save.debt)} cr</p>
    <p>Peak G: ${ship.peakG.toFixed(1)} G</p>
    <div class="row"><button type="button" onclick="showMissions()">MISSIONS</button><button type="button" onclick="showHangar()">HANGAR / SERVICE</button><button type="button" onclick="startMissionById('${m.id}')">FLY AGAIN</button></div>`);
     } else {
-        showScreen(`<h1>MISSION FAILED</h1><p>${ship.hull <= 0 ? 'The shuttle was destroyed.' : ship.crew <= 0 ? 'Passengers did not survive the flight.' : ship.failureReason || 'You missed the landing zone.'}</p><p>No payment was issued. Burned fuel and hull damage are retained.</p><p>Fuel remaining: ${save.fuel.toFixed(2)} / ${maxFuel()} units · Hull: ${save.hull.toFixed(2)} / ${maxHull()} · Debt: ${FuelEconomy.money(save.debt)} cr</p><div class="row"><button type="button" onclick="startMissionById('${m.id}')">RETRY</button><button type="button" onclick="showMissions()">MISSIONS</button><button type="button" onclick="showHangar()">HANGAR / SERVICE</button></div>`);
+        showScreen(`<h1>MISSION FAILED</h1><p>${ship.hull <= 0 ? 'The shuttle was destroyed.' : ship.crew <= 0 ? 'Passengers did not survive the flight.' : ship.failureReason || 'You missed the landing zone.'}</p><p>No payment was issued. Burned fuel and hull damage are retained.</p><p>Fuel remaining: ${save.fuel.toFixed(2)} / ${maxFuel()} units · Hull: ${save.hull.toFixed(2)} / ${maxHull()} · Debt: ${FuelManager.money(save.debt)} cr</p><div class="row"><button type="button" onclick="startMissionById('${m.id}')">RETRY</button><button type="button" onclick="showMissions()">MISSIONS</button><button type="button" onclick="showHangar()">HANGAR / SERVICE</button></div>`);
     }
 }
 
@@ -661,7 +753,11 @@ function loop(now) {
         resultDelay -= dt;
         updateDust(dt);
         if (resultDelay <= 0) showResult(true);
+    } else if (state === 'over' && resultDelay > 0) {
+        resultDelay -= dt;
+        if (resultDelay <= 0) showResult(false);
     }
+    updateExplosions(dt);
     cameraShake *= Math.exp(-5 * dt);
     if (ship && (state === 'play' || state === 'won' || state === 'over')) draw();
     requestAnimationFrame(loop);
