@@ -9,6 +9,7 @@ const BASE_FARE = 500, FUEL_BONUS_MAX = 500, HAPPINESS_RATE = 5;
 const TARGET_TIME = 90, SPEED_BONUS_RATE = 10, SPEED_BONUS_MAX = 900;
 const SAVE_KEY = 'orbitalExcursionsSave_v1';
 const LANDING = { deployTime: 2, travel: 10, spring: 24, damper: 5.5, settleTime: .65, crashSpeed: 8.5 };
+const allLevelsUnlocked = new URLSearchParams(window.location.search).get('lyonbach') === '1';
 
 const MISSIONS = [
     {
@@ -311,12 +312,12 @@ function showEnvironment(m) {
 }
 
 function startMission(m) {
-    if (save.fuel <= 1e-6 || save.hull <= 1e-6) { showHangar(); return; }
+    if ((!allLevelsUnlocked && save.fuel <= 1e-6) || save.hull <= 1e-6) { showHangar(); return; }
     selectedMission = m;
     terrain = makeTerrain(m);
     stars = Array.from({ length: 170 }, () => ({ x: Math.random() * W, y: Math.random() * H * .72, r: Math.random() * 1.5 + .3, a: Math.random() * .7 + .2 }));
     const fuelMax = maxFuel();
-    ship = { x: 120, y: 120, vx: m.startVx, vy: 0, angle: 0, angVel: 0, fuel: save.fuel, fuelMax, hull: save.hull, hullMax: maxHull(), crew: 100, happiness: 100, thrusting: false, rcsL: false, rcsR: false, gVert: 0, gLat: 0, prevVx: 0, prevVy: 0, peakG: 0, gear: createLandingGear(), settleTime: 0, failureReason: '' };
+    ship = { x: 120, y: 120, vx: m.startVx, vy: 0, angle: 0, angVel: 0, fuel: allLevelsUnlocked ? fuelMax : save.fuel, fuelMax, hull: save.hull, hullMax: maxHull(), crew: 100, happiness: 100, thrusting: false, rcsL: false, rcsR: false, gVert: 0, gLat: 0, prevVx: 0, prevVy: 0, peakG: 0, gear: createLandingGear(), settleTime: 0, failureReason: '' };
     approachState = ApproachWarnings.create(Math.max(0, clearanceAt(ship).gap / SCALE));
     missionTime = 0; result = null; windPhase = 0; shipAccel = { x: 0, y: 0 }; resourceSaveElapsed = 0;
     dustParticles = []; explosions = []; explosionBursts = []; resultDelay = 0; cameraShake = 0;
@@ -349,7 +350,7 @@ function update(dt) {
         main: !!(keys.KeyW || keys.ArrowUp), left: !!(keys.KeyA || keys.ArrowLeft),
         right: !!(keys.KeyD || keys.ArrowRight), ccw: !!keys.KeyQ, cw: !!keys.KeyE
     }, dt, enginePower() * (.55 + .45 * s.hull / s.hullMax), rcsPower());
-    s.jets = commands.jets; s.fuel = Math.max(0, s.fuel - commands.fuelUsed);
+    s.jets = commands.jets; s.fuel = allLevelsUnlocked ? s.fuelMax : Math.max(0, s.fuel - commands.fuelUsed);
     s.thrusting = commands.main; s.rcsL = commands.left; s.rcsR = commands.right;
 
     let ax = 0, ay = m.gravity;
@@ -667,9 +668,9 @@ function showTitle() {
 
 function showMissions() {
     state = 'missions';
-    const fueled = save.fuel > 1e-6, operable = save.hull > 1e-6;
+    const fueled = allLevelsUnlocked || save.fuel > 1e-6, operable = save.hull > 1e-6;
     const cards = MISSIONS.map((m, i) => {
-        const unlocked = i === 0 || save.completed.includes(MISSIONS[i - 1].id);
+        const unlocked = allLevelsUnlocked || i === 0 || save.completed.includes(MISSIONS[i - 1].id);
         const done = save.completed.includes(m.id);
         return `<div class="mission">
    <h3>${m.name} ${done ? '<span class="good">— COMPLETED</span>' : ''}</h3>

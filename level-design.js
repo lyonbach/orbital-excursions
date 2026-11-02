@@ -237,8 +237,8 @@ const LevelDesign=(()=>{
  roots.push(jupiterFloat);
  destinations.push({id:'jupiter',name:'Jupiter',intro:'jupiter-float',previous:'io',environment:jupiterEnvironment,gravity:jupiterFloat.gravity,drag:jupiterFloat.drag,wind:jupiterFloat.wind});
  const done=id=>save.completed.includes(id);
- function destinationOpen(d){return !d.previous||done(d.previous)||MISSIONS.some(m=>m.destination===d.id&&done(m.id));}
- function missionOpen(m){const d=destinations.find(d=>d.id===m.destination);return !!d&&destinationOpen(d)&&(!m.requires||done(m.requires)||done(m.id));}
+ function destinationOpen(d){return allLevelsUnlocked||!d.previous||done(d.previous)||MISSIONS.some(m=>m.destination===d.id&&done(m.id));}
+ function missionOpen(m){if(!m)return false;const d=destinations.find(d=>d.id===m.destination);return allLevelsUnlocked||!!d&&destinationOpen(d)&&(!m.requires||done(m.requires)||done(m.id));}
  const resources=()=>`Credits: ${FuelManager.money(save.credits)} cr · Fuel ${save.fuel.toFixed(2)} / ${maxFuel()} · Hull ${save.hull.toFixed(2)} / ${maxHull()}`;
  function showDestinations(){
   state='missions';
@@ -253,7 +253,7 @@ const LevelDesign=(()=>{
   if(!d||!destinationOpen(d)){showDestinations();return;}
   state='missions';
   const cards=MISSIONS.filter(m=>m.destination===id).map(m=>{
-   const open=missionOpen(m),operable=save.hull>1e-6,fueled=save.fuel>1e-6;
+   const open=missionOpen(m),operable=save.hull>1e-6,fueled=allLevelsUnlocked||save.fuel>1e-6;
    const label=!open?'LOCKED':!operable?'REPAIR IN HANGAR':!fueled?'REFUEL IN HANGAR':'LAUNCH';
    const prerequisite=m.requires?MISSIONS.find(v=>v.id===m.requires):null;
    return `<div class="mission"><h3>${m.name}${done(m.id)?' — COMPLETED':''}</h3><p>${m.description}</p><p class="small">Fare ${m.fare} cr · ${m.layout?'Handcrafted terrain':m.platform?'Floating platform':'Original approach'}</p>${!open&&prerequisite?`<p class="small">Complete ${prerequisite.name} to unlock.</p>`:''}<button type="button" ${open&&operable&&fueled?'':'disabled'} onclick="startMissionById('${m.id}')">${label}</button></div>`;
