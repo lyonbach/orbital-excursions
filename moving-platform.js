@@ -39,15 +39,9 @@ const MovingPlatform=(()=>{
   terrain.pad.x=platform.x;
   terrain.pad.y=platform.y;
   terrain.pad.w=platform.width;
-  terrain.pts=[
-   {x:-400,y:H*.9},
-   {x:platform.x-14,y:platform.y},
-   {x:platform.x,y:platform.y},
-   {x:platform.x+platform.width,y:platform.y},
-   {x:platform.x+platform.width+14,y:platform.y},
-   {x:W+400,y:H*.9}
-  ];
- }
+   terrain.platformOnly=true;
+   terrain.pts=[];
+  }
  function reset(platform){
   if(!platform)return;
   platform.x=platform.baseX;

@@ -236,6 +236,7 @@
   if(showFlightInstruments&&state==='play')drawShipReadouts();
   drawExplosions();
   ctx.restore();
+  drawOffscreenShipIndicator();
    ApproachWarnings.render(approachAlertEl,approachState,state==='play');
    const gearStatusEl=document.getElementById('gearStatus');
    const status=ApproachWarnings.gearStatus(ship.gear);

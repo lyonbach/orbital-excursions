@@ -222,9 +222,11 @@ const EnvironmentVisuals=(()=>{
   if(key()!=='jupiter')drawWindsock(selectedMission);
   spawnWindDust(dt);drawWindDust();drawDust();
   if(showTrajectory&&state==='play')drawTrajectory();
-  drawShip();
+  if(state!=='over')drawShip();
   if(showFlightInstruments&&state==='play')drawShipReadouts();
+  drawExplosions();
   ctx.restore();
+  drawOffscreenShipIndicator();
    ApproachWarnings.render(approachAlertEl,approachState,state==='play');
    const gear=document.getElementById('gearStatus'),status=ApproachWarnings.gearStatus(ship.gear);
    gear.textContent=status;

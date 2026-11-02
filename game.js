@@ -138,6 +138,18 @@ function clearanceAt(s, compressed = true) {
         return gap < best.gap ? { gap, x: p.x, y: p.y } : best;
     }, { gap: Infinity, x: s.x, y: s.y });
 }
+function landingSurfaceYAt(x) {
+    if (terrain.platformOnly && (x < terrain.pad.x || x > terrain.pad.x + terrain.pad.w)) return null;
+    return terrainYAt(x);
+}
+function landingClearanceAt(s, compressed = true) {
+    return contactPoints(s, compressed).reduce((best, p) => {
+        const surfaceY = landingSurfaceYAt(p.x);
+        if (surfaceY === null) return best;
+        const gap = surfaceY - p.y;
+        return gap < best.gap ? { gap, x: p.x, y: p.y } : best;
+    }, { gap: Infinity, x: s.x, y: s.y });
+}
 function applyLandingDamage(s, amount) {
     const damage = Math.max(0, amount) * hullResistance();
     s.hull = Math.max(0, s.hull - damage);
@@ -245,19 +257,20 @@ function drawDust() {
     }
     ctx.globalAlpha = 1;
 }
-function integrateLandingMotion(s, dt, ax, ay) {
+function integrateLandingMotion(s, dt, ax, ay, atmosphericDrag) {
     const steps = Math.ceil(dt * 120), h = dt / steps;
     for (let i = 0; i < steps && !s.failureReason; i++) {
         let support = 0, torque = 0, contacts = 0;
         const drive = ThrusterPhysics.wrench(s.jets || [], s.angle, SCALE);
         const down = s.gear.progress >= .999;
         for (const leg of s.gear.legs) {
-            const foot = gearFoot(s, leg, false), penetration = foot.y - terrainYAt(foot.x);
-            const touching = down && penetration > 0;
+            const foot = gearFoot(s, leg, false), surfaceY = landingSurfaceYAt(foot.x);
+            const penetration = surfaceY === null ? 0 : foot.y - surfaceY;
+            const touching = down && surfaceY !== null && penetration > 0;
             if (touching) {
                 const rx = (foot.x - s.x) / SCALE, normalSpeed = s.vy + s.angVel * rx;
                 if (!leg.touching) {
-                    spawnDust(foot.x, terrainYAt(foot.x), Math.abs(normalSpeed), leg.side);
+                    spawnDust(foot.x, surfaceY, Math.abs(normalSpeed), leg.side);
                     cameraShake = Math.min(12, cameraShake + Math.max(0, normalSpeed) * .5);
                     applyLandingDamage(s, (Math.max(0, normalSpeed - SAFE_VS - 1.2) * 8 + Math.max(0, Math.abs(s.vx) - SAFE_HS) * 5) / 2);
                     const onPad = foot.x > terrain.pad.x && foot.x < terrain.pad.x + terrain.pad.w;
@@ -270,13 +283,14 @@ function integrateLandingMotion(s, dt, ax, ay) {
         }
         if (s.failureReason) break;
         s.vx += (ax + drive.ax) * h; s.vy += (ay + drive.ay - support) * h;
-        s.angVel = (s.angVel + (torque + drive.alpha) * h) * ThrusterPhysics.damping(h);
+        s.angVel = (s.angVel + (torque + drive.alpha) * h) * Math.exp(-atmosphericDrag * 8 * h);
         if (contacts) s.vx *= Math.exp(-4 * h);
         s.x += s.vx * SCALE * h; s.y += s.vy * SCALE * h;
         s.angle = ThrusterPhysics.normalizeAngle(s.angle + s.angVel * h);
         const c = Math.cos(s.angle);
         for (const leg of s.gear.legs) {
-            const foot = gearFoot(s, leg, false), penetration = Math.max(0, foot.y - terrainYAt(foot.x));
+            const foot = gearFoot(s, leg, false), surfaceY = landingSurfaceYAt(foot.x);
+            const penetration = surfaceY === null ? 0 : Math.max(0, foot.y - surfaceY);
             leg.compression = down ? Math.min(LANDING.travel, penetration / Math.max(.2, c)) : 0;
             if (down && c > .25 && penetration > LANDING.travel * c) {
                 applyLandingDamage(s, Math.max(0, s.vy - 1.2) * 12);
@@ -284,7 +298,10 @@ function integrateLandingMotion(s, dt, ax, ay) {
             }
         }
         const hull = hullPoints(s);
-        const penetration = Math.max(...hull.map(p => p.y - terrainYAt(p.x)));
+        const penetration = Math.max(...hull.map(p => {
+            const surfaceY = landingSurfaceYAt(p.x);
+            return surfaceY === null ? -Infinity : p.y - surfaceY;
+        }));
         if (penetration >= 0) {
             applyLandingDamage(s, 15 + Math.max(0, s.vy) * 8 + Math.abs(s.vx) * 5);
             s.y -= penetration + .01; s.vy = Math.min(0, s.vy);
@@ -329,6 +346,7 @@ function startMission(m) {
 }
 
 function terrainYAt(x) {
+    if (terrain.platformOnly) return terrain.pad.y;
     const p = terrain.pts;
     for (let i = 0; i < p.length - 1; i++) {
         if (x >= p[i].x && x <= p[i + 1].x) { const f = (x - p[i].x) / (p[i + 1].x - p[i].x); return p[i].y + (p[i + 1].y - p[i].y) * f; }
@@ -356,8 +374,18 @@ function update(dt) {
     let ax = 0, ay = m.gravity;
     if (m.wind) { ax += Math.sin(windPhase * .7) * m.wind * .08; }
     const drag = m.drag || 0;
-    ax -= s.vx * drag; ay -= s.vy * drag;
-    integrateLandingMotion(s, dt, ax, ay);
+    if (drag > 0) {
+        const speed = Math.hypot(s.vx, s.vy);
+        if (speed > 1e-6) {
+            const heading = s.angle - Math.PI / 2;
+            const flightPath = Math.atan2(s.vy, s.vx);
+            const crosswind = Math.sin(flightPath - heading);
+            const aerodynamicDrag = drag * (.35 + .65 * crosswind * crosswind);
+            ax -= s.vx * aerodynamicDrag;
+            ay -= s.vy * aerodynamicDrag;
+        }
+    }
+    integrateLandingMotion(s, dt, ax, ay, drag);
     updateDust(dt);
     const dvx = (s.vx - s.prevVx) / dt, dvy = (s.vy - s.prevVy) / dt;
     shipAccel = { x: dvx, y: dvy };
@@ -374,9 +402,7 @@ function update(dt) {
         s.happiness = Math.min(100, s.happiness + 1.1 * dt);
     }
 
-    if (s.x < 20) { s.x = 20; s.vx = Math.abs(s.vx) * .4; s.hull = Math.max(0, s.hull - 2 * hullResistance()); s.happiness = Math.max(0, s.happiness - 3); }
-    if (s.x > W - 20) { s.x = W - 20; s.vx = -Math.abs(s.vx) * .4; s.hull = Math.max(0, s.hull - 2 * hullResistance()); s.happiness = Math.max(0, s.happiness - 3); }
-    if (s.y < 20) { s.y = 20; s.vy = Math.max(s.vy, 0); }
+    if (distanceOutsideViewport(s) > 50) s.failureReason = 'The shuttle left the mission area.';
     save.fuel = s.fuel; save.hull = s.hull; resourceSaveElapsed += dt;
     if (resourceSaveElapsed >= 1) { persist(); resourceSaveElapsed = 0; }
 
@@ -416,6 +442,41 @@ function calculatePayout(success) {
     return { money, fuelBonus, happinessBonus, speedBonus, debtRepaid: 0, netMoney: money };
 }
 
+function distanceOutsideViewport(s) {
+    const horizontal = Math.max(0, -s.x, s.x - W);
+    const vertical = Math.max(0, -s.y, s.y - H);
+    return Math.hypot(horizontal, vertical) / SCALE;
+}
+
+function drawOffscreenShipIndicator() {
+    if (!ship || state !== 'play' || ship.x >= 0 && ship.x <= W && ship.y >= 0 && ship.y <= H) return;
+    const centerX = W / 2, centerY = H / 2, margin = 30;
+    const dx = ship.x - centerX, dy = ship.y - centerY;
+    const scale = 1 / Math.max(Math.abs(dx) / (centerX - margin), Math.abs(dy) / (centerY - margin));
+    const x = centerX + dx * scale, y = centerY + dy * scale;
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(Math.atan2(dy, dx) + Math.PI / 2);
+    ctx.fillStyle = '#ffcb5c';
+    ctx.strokeStyle = '#fff4bd';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(0, -12);
+    ctx.lineTo(9, 10);
+    ctx.lineTo(0, 6);
+    ctx.lineTo(-9, 10);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    ctx.rotate(-Math.atan2(dy, dx) - Math.PI / 2);
+    ctx.fillStyle = '#fff4bd';
+    ctx.font = '12px ui-monospace,monospace';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+    ctx.fillText(`${Math.ceil(distanceOutsideViewport(ship))} m`, 0, 16);
+    ctx.restore();
+}
+
 function draw() {
     ctx.clearRect(0, 0, W, H);
     const shakeX = (Math.random() - .5) * cameraShake;
@@ -446,6 +507,7 @@ function draw() {
     if (showFlightInstruments && state === 'play') drawShipReadouts();
     drawExplosions();
     ctx.restore();
+    drawOffscreenShipIndicator();
     ApproachWarnings.render(approachAlertEl, approachState, state === 'play');
     const gearStatusEl = document.getElementById('gearStatus');
     const status = ApproachWarnings.gearStatus(ship.gear);
@@ -548,14 +610,14 @@ function drawTrajectory() {
         const ay = m.gravity - vy * drag;
         vx += ax * dt; vy += ay * dt; x += vx * SCALE * dt; y += vy * SCALE * dt;
         if (x < 20 || x > W - 20 || y < 20) { points.push({ x, y }); break; }
-        if (clearanceAt(projected(x, y), false).gap <= 0) {
+        if (landingClearanceAt(projected(x, y), false).gap <= 0) {
             let lo = 0, hi = 1;
             for (let j = 0; j < 10; j++) {
                 const f = (lo + hi) / 2, px = oldX + (x - oldX) * f, py = oldY + (y - oldY) * f;
-                if (clearanceAt(projected(px, py), false).gap <= 0) hi = f; else lo = f;
+                if (landingClearanceAt(projected(px, py), false).gap <= 0) hi = f; else lo = f;
             }
             x = oldX + (x - oldX) * hi; y = oldY + (y - oldY) * hi;
-            points.push({ x, y }); const contact = clearanceAt(projected(x, y), false);
+            points.push({ x, y }); const contact = landingClearanceAt(projected(x, y), false);
             impact = { x: contact.x, y: terrainYAt(contact.x) }; break;
         }
         if (i % 4 === 0) points.push({ x, y });

@@ -66,6 +66,6 @@ const ThrusterPhysics = (() => {
         ctx.restore();
     }
 
-    return { prepare, wrench, draw, inertia, damping: dt => Math.pow(.94, dt * 60), normalizeAngle: a => Math.atan2(Math.sin(a), Math.cos(a)) };
+    return { prepare, wrench, draw, inertia, normalizeAngle: a => Math.atan2(Math.sin(a), Math.cos(a)) };
 
 })();
