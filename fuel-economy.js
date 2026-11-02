@@ -5,7 +5,7 @@ const FuelEconomy=(()=>{
  const money=v=>v.toFixed(2);
  const units=v=>v.toFixed(2);
  const capacity=s=>100+20*s.upgrades.fuel;
- function fresh(){return {credits:200,fuel:0,hull:100,debt:0,economyVersion:1,upgrades:{engine:0,fuel:0,hull:0,rcs:0},completed:[]};}
+ function fresh(){return {credits:200,fuel:25,hull:100,debt:0,economyVersion:1,upgrades:{engine:0,fuel:0,hull:0,rcs:0},completed:[]};}
  function migrate(raw){
   if(!raw||typeof raw!=='object'||Array.isArray(raw))return fresh();
   const s=fresh();
@@ -94,7 +94,7 @@ const RepairShop=(()=>{
   if(!canBorrow(s))return false;
   const amount=Math.max(0,capacity(s)*.5-s.hull);
   const cost=Math.ceil(amount*price*100-1e-7)/100;
-  s.hull+=amount;s.debt=Math.round((s.debt+cost)*100)/100;
+  s.hull+=amount;s.debt=Math.round((s.debt+cost*100)/100);
   return {amount,cost};
  }
  function panel(s){
@@ -108,14 +108,14 @@ const RepairShop=(()=>{
   const loanCost=Math.ceil(cap*.5*price*100)/100;
   return `<div class="upgrade"><h3>Repair shop</h3>
    <p>Hull: ${s.hull.toFixed(2)} / ${cap} — ${Math.round(s.hull/cap*100)}%</p>
-   <div class="bar"><div class="fill" style="width:${s.hull/cap*100}%;background:#7ee787"></div></div>
-   <p class="${s.hull<=epsilon?'bad':missing>epsilon?'warn':'good'}">${condition}</p>
+   <div class="bar"><div class="fill" style="width:${s.fuel/cap*100}%;background:#59c2ff"></div></div>
+   <p class="${s.hull<=epsilon?'bad':missing<=epsilon?'good':'warn'}">${condition}</p>
    <p class="small">${price} cr per hull point. Repair costs round up to the nearest 0.01 cr. Damage carries across missions, retries, and reloads. Hull upgrades add capacity, not repairs.</p>
    <div class="row">${buttons}</div>
    <h3 style="margin-top:14px">Emergency rebuilding</h3>
    <p class="small">Available only at zero hull with less than ${price} cr. Restore to 50% hull, add the repair cost to your existing debt, and receive no spendable credits. No interest; successful missions repay debt first.</p>
-   <button type="button" ${canBorrow(s)?'':'disabled'} onclick="borrowEmergencyRepair()">Emergency repair — ${ (cap*.5).toFixed(2)} hull / ${money(loanCost)} cr debt</button>
+   <button type="button" ${canBorrow(s)?'':'disabled'} onclick="borrowEmergencyRepair()">Emergency repair — ${(cap*.5).toFixed(2)} hull / ${money(loanCost)} cr debt</button>
   </div>`;
  }
- return {price,capacity,quote,repair,canBorrow,borrow,panel};
+ return {price,capacity,quote,repair,canBorrow,borrow,panel,money};
 })();
