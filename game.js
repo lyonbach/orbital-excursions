@@ -359,6 +359,7 @@ function update(dt) {
     t += dt; missionTime += dt; windPhase += dt;
     const s = ship, m = selectedMission;
     s.prevVx = s.vx; s.prevVy = s.vy;
+    const previousAngularVelocity = s.angVel;
     const gearProgress = s.gear.progress, gearTarget = s.gear.target;
     s.gear.progress += Math.max(-dt / LANDING.deployTime, Math.min(dt / LANDING.deployTime, gearTarget - gearProgress));
     if (gearTarget === 1 && gearProgress < .999 && s.gear.progress >= .999) playFlightSound('gearLock', 1.2, true);
@@ -388,6 +389,7 @@ function update(dt) {
     integrateLandingMotion(s, dt, ax, ay, drag);
     updateDust(dt);
     const dvx = (s.vx - s.prevVx) / dt, dvy = (s.vy - s.prevVy) / dt;
+    const angularAcceleration = (s.angVel - previousAngularVelocity) / dt;
     shipAccel = { x: dvx, y: dvy };
     s.gLat = Math.abs(dvx) / G; s.gVert = Math.abs(dvy) / G;
     const totalG = Math.hypot(dvx, dvy) / G;
@@ -401,6 +403,9 @@ function update(dt) {
         s.crew = Math.min(100, s.crew + .7 * dt);
         s.happiness = Math.min(100, s.happiness + 1.1 * dt);
     }
+    const rotationalStress = Math.max(0, Math.abs(s.angVel) - 1.2) * 1.25
+        + Math.max(0, Math.abs(angularAcceleration) - 3.5) * .35;
+    s.happiness = Math.max(0, s.happiness - rotationalStress * dt);
 
     if (distanceOutsideViewport(s) > 50) s.failureReason = 'The shuttle left the mission area.';
     save.fuel = s.fuel; save.hull = s.hull; resourceSaveElapsed += dt;
