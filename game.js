@@ -266,7 +266,8 @@ function integrateLandingMotion(s, dt, ax, ay, atmosphericDrag) {
         for (const leg of s.gear.legs) {
             const foot = gearFoot(s, leg, false), surfaceY = landingSurfaceYAt(foot.x);
             const penetration = surfaceY === null ? 0 : foot.y - surfaceY;
-            const touching = down && surfaceY !== null && penetration > 0;
+            const approachingPlatformTop = !terrain.platformOnly || surfaceY !== null && s.y <= surfaceY;
+            const touching = down && surfaceY !== null && approachingPlatformTop && penetration > 0;
             if (touching) {
                 const rx = (foot.x - s.x) / SCALE, normalSpeed = s.vy + s.angVel * rx;
                 if (!leg.touching) {
@@ -300,7 +301,7 @@ function integrateLandingMotion(s, dt, ax, ay, atmosphericDrag) {
         const hull = hullPoints(s);
         const penetration = Math.max(...hull.map(p => {
             const surfaceY = landingSurfaceYAt(p.x);
-            return surfaceY === null ? -Infinity : p.y - surfaceY;
+            return surfaceY === null || terrain.platformOnly && s.y > surfaceY ? -Infinity : p.y - surfaceY;
         }));
         if (penetration >= 0) {
             applyLandingDamage(s, 15 + Math.max(0, s.vy) * 8 + Math.abs(s.vx) * 5);
@@ -448,8 +449,9 @@ function calculatePayout(success) {
 }
 
 function distanceOutsideViewport(s) {
+    const lowerBoundary = selectedMission.terrainMode === 'atmospheric' ? H * 2 : H;
     const horizontal = Math.max(0, -s.x, s.x - W);
-    const vertical = Math.max(0, -s.y, s.y - H);
+    const vertical = Math.max(0, -s.y, s.y - lowerBoundary);
     return Math.hypot(horizontal, vertical) / SCALE;
 }
 
@@ -615,7 +617,8 @@ function drawTrajectory() {
         const ay = m.gravity - vy * drag;
         vx += ax * dt; vy += ay * dt; x += vx * SCALE * dt; y += vy * SCALE * dt;
         if (x < 20 || x > W - 20 || y < 20) { points.push({ x, y }); break; }
-        if (landingClearanceAt(projected(x, y), false).gap <= 0) {
+        const approachingPlatformTop = !terrain.platformOnly || oldY <= terrain.pad.y;
+        if (approachingPlatformTop && landingClearanceAt(projected(x, y), false).gap <= 0) {
             let lo = 0, hi = 1;
             for (let j = 0; j < 10; j++) {
                 const f = (lo + hi) / 2, px = oldX + (x - oldX) * f, py = oldY + (y - oldY) * f;

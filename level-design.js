@@ -233,7 +233,12 @@ const LevelDesign=(()=>{
   description:'The grand terminal rides the storm at high speed. Match its motion, fight the crosswind, and settle with absolute precision.',
   environment:jupiterEnvironment
  };
- MISSIONS.push(jupiterFloat,jupiterDrift,jupiterStorm,jupiterBrass,jupiterCopper,jupiterHigh,jupiterGust,jupiterRivet,jupiterTempest,jupiterZeppelin);
+ const jupiterMissions=[jupiterFloat,jupiterDrift,jupiterStorm,jupiterBrass,jupiterCopper,jupiterHigh,jupiterGust,jupiterRivet,jupiterTempest,jupiterZeppelin];
+ for(const mission of jupiterMissions){
+  mission.terrainMode='atmospheric';
+  mission.visualTheme='jupiter';
+ }
+ MISSIONS.push(...jupiterMissions);
  roots.push(jupiterFloat);
  destinations.push({id:'jupiter',name:'Jupiter',intro:'jupiter-float',previous:'io',environment:jupiterEnvironment,gravity:jupiterFloat.gravity,drag:jupiterFloat.drag,wind:jupiterFloat.wind});
  const done=id=>save.completed.includes(id);
@@ -262,6 +267,11 @@ const LevelDesign=(()=>{
  }
  const originalTerrain=makeTerrain;
  makeTerrain=function(m){
+  if(m.terrainMode==='atmospheric'){
+   const platform=m.platform;
+   const pw=platform?.width||m.padWidth,px=platform?W*platform.x:W*.72,py=platform?H*platform.y:H-105;
+   return {pts:[],pad:{x:px,w:pw,y:py},platformOnly:true};
+  }
   if(!m.layout)return originalTerrain(m);
   const l=m.layout,pw=Math.min(m.padWidth,Math.max(60,W*.22));
   const px=Math.min(W-pw-24,Math.max(24,W*l.padAt)),py=H*l.padY;

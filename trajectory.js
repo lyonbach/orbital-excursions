@@ -23,12 +23,15 @@
    const ay=m.gravity-vy*drag;
    vx+=ax*dt;vy+=ay*dt;
    x+=vx*SCALE*dt;y+=vy*SCALE*dt;
-   const clearance=terrainYAt(x)-18-y;
-   if(clearance<=0){
+   const surfaceY=landingSurfaceYAt(x);
+   const clearance=surfaceY===null?Infinity:surfaceY-18-y;
+   const approachingPlatformTop=!terrain.platformOnly||surfaceY!==null&&oldY+18<=surfaceY;
+   if(clearance<=0&&approachingPlatformTop){
     let lo=0,hi=1;
     for(let j=0;j<10;j++){
      const f=(lo+hi)/2,px=oldX+(x-oldX)*f,py=oldY+(y-oldY)*f;
-     if(py+18>=terrainYAt(px))hi=f;else lo=f;
+     const collisionY=landingSurfaceYAt(px);
+     if(collisionY!==null&&py+18>=collisionY)hi=f;else lo=f;
     }
     x=oldX+(x-oldX)*hi;y=oldY+(y-oldY)*hi;
     points.push({x,y});impact={x,y:y+18};break;

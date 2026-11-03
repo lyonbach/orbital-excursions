@@ -19,8 +19,8 @@
   const id=selectedMission&&selectedMission.id;
   return themes[id]||themes.lunar;
  }
- function isJupiter(){
-  return selectedMission&&(selectedMission.destination==='jupiter'||selectedMission.id==='jupiter-high');
+ function isAtmosphericMission(){
+  return selectedMission&&selectedMission.terrainMode==='atmospheric';
  }
  function windDirection(m,phase){
   if(!m||!m.wind)return 1;
@@ -130,7 +130,7 @@
   drawLandingLights(s);
  };
  drawWindsock=function(m){
-  if(m.wind<=0)return;
+  if(isAtmosphericMission()||m.wind<=0)return;
   const now=clock();
   const strength=windStrength(m,windPhase);
   const direction=windDirection(m,windPhase);
@@ -208,7 +208,7 @@
  draw=function(){
   const now=clock(),dt=Math.min(.1,Math.max(0,now-lastVisualTime));
   lastVisualTime=now;
-  if(isJupiter()&&window.EnvironmentVisuals&&EnvironmentVisuals.draw){
+  if(isAtmosphericMission()&&window.EnvironmentVisuals&&EnvironmentVisuals.draw){
    EnvironmentVisuals.draw(dt);
    return;
   }
