@@ -1,4 +1,4 @@
-import { GRAVITY_EARTH, GASC } from './constants.js';
+import { GRAVITY_EARTH, GRAVITY_MOON, GASC } from './constants.js';
 
 class Environment {
     constructor(gravity) {
@@ -18,5 +18,11 @@ class Earth extends Environment {
     }
 }
 
+class Moon extends Environment {
+    constructor() {
+        super(GRAVITY_MOON);
+    }
+}
 
-export { Environment, Earth };
+
+export { Environment, Earth, Moon };

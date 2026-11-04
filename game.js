@@ -1,8 +1,11 @@
+import { ShipTypeA } from './ship.js';
+
 /**
  * Game class representing the main game logic.
  */
 class Game {
-    constructor(environment) {
+    constructor(context, environment) {
+        this.context = context;
         this.gameObjects = [];
         this.environment = environment;
     }
@@ -12,6 +15,10 @@ class Game {
     }
 
     update() {
+
+        // TEMPORARY
+        var platform = this.gameObjects[1];
+
         for (const gameObject of this.gameObjects) {
             if (typeof gameObject.update === 'function') {
                 gameObject.update();

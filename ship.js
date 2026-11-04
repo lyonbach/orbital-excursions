@@ -11,10 +11,10 @@ class Ship {
 
         this.acceleration = new Vector2(0.0, 0.0);
         this.angularAcceleration = 0.0;
-        this.thrust = 0.0;
+        this.thrust = new Vector2(0.0, 0.0);
 
         this.angularThrustCapability = 0.0;
-        this.thrustCapability = 0.0;
+        this.thrustCapability = new Vector2(0.0, 0.0);
     }
 
     set(settings) {
@@ -32,15 +32,17 @@ class ShipTypeA extends Ship {
     constructor(position, velocity) {
         super(position, velocity);
         this.set({  // TODO LATER FROM A JSON FILE
-            angularThrustCapability: 0.001,
-            thrustCapability: 0.02
+            angularThrustCapability: (0.0002),
+            thrustCapability: new Vector2(0.005, 0.008)
         });
     }
 
     calculateThrustVector() {
+        const cos = Math.cos(this.angle - Math.PI / 2);
+        const sin = Math.sin(this.angle - Math.PI / 2);
         return new Vector2(
-            Math.cos(this.angle - Math.PI / 2) * this.thrust,
-            Math.sin(this.angle - Math.PI / 2) * this.thrust
+            cos * this.thrust.y - sin * this.thrust.x,
+            sin * this.thrust.y + cos * this.thrust.x
         );
     }
 
@@ -65,18 +67,67 @@ class ShipTypeA extends Ship {
 
         // Define the triangle relative to (0, 0).
         context.beginPath();
-        context.moveTo(0.0, -20.0);
+        context.moveTo(-2.0, -20.0);
+        context.lineTo(2.0, -20.0);
         context.lineTo(10.0, 10.0);
         context.lineTo(-10.0, 10.0);
         context.closePath();
-
-        // Fill while the transform is still active.
-        context.fillStyle = "tomato";
+        context.fillStyle = "gray";
         context.fill();
+
+        // Draw the exhaust flame based on the current thrust.
+        if (this.thrust.y > 0) {
+            context.beginPath();
+            const y = 35.0 + Math.random() * 10;
+            context.moveTo(0.0, y);
+            context.lineTo(5.0, 10.0);
+            context.lineTo(-5.0, 10.0);
+            context.closePath();
+            context.fillStyle = "yellow";
+            context.fill();
+        }
+
+        if (this.thrust.y > 0) {
+            context.beginPath();
+            const y = 25.0 + Math.random() * 10;
+            context.moveTo(0.0, y);
+            context.lineTo(5.0, 10.0);
+            context.lineTo(-5.0, 10.0);
+            context.closePath();
+            context.fillStyle = "tomato";
+            context.fill();
+        }
+
+        // Draw the lateral thrusters based on the current thrust in the x direction.
+        function drawLateralThruster(self, x, y, positive) {
+            context.beginPath();
+            const r = Math.random() * 4.0;
+            const p = positive ? 1 : -1;
+            const startX = (self.thrust.x > 0 ? -x : x) * p;
+            const direction = startX < 0 ? -1 : 1;
+            context.rect(startX, y - 1, direction * 2.5, 4);
+            context.rect(startX, y, direction * (10.0 + r), 2);
+            context.fillStyle = "#dbdbdb";
+            context.fill();
+        }
+
+        if (this.thrust.x !== 0) {
+            drawLateralThruster(this, 10, -1, true);
+            drawLateralThruster(this, 5, -16, true);
+        }
+        
+        if (this.angularAcceleration > 0) {
+            drawLateralThruster(this, 10, -1, false);
+            drawLateralThruster(this, 5, -16, true);
+        } else if (this.angularAcceleration < 0) {
+            drawLateralThruster(this, 10, -1, true);
+            drawLateralThruster(this, 5, -16, false);
+        }
 
         context.restore();
 
     }
+
 }
 
 export { ShipTypeA, Ship };
