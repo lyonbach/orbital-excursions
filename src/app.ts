@@ -1,12 +1,22 @@
 import Game from './game.js';
 import { Earth, Moon } from './environment.js';
-import { ShipTypeA } from './ship.js';
-import { Platform } from './gameObject.js';
+import { Ship, Platform } from './gameObject.js';
 import Vector2 from './vector.js';
 
 
 class App {
-    constructor(context) {
+
+    private context: CanvasRenderingContext2D;
+    private previousTime: number | null;
+    private game: Game;
+    private playerShip: Ship;
+    private platform: Platform;
+
+    private screenWidth!: number;
+    private screenHeight!: number;
+    private resizeCanvas: () => void;
+
+    constructor(context: CanvasRenderingContext2D) {
         this.run = this.run.bind(this);
         this.previousTime = null;
 
@@ -40,7 +50,7 @@ class App {
             this.screenHeight / 4
         );
 
-        this.playerShip = new ShipTypeA(startPos, new Vector2(0, 0));
+        this.playerShip = new Ship(startPos, new Vector2(0, 0));
         this.game.addGameObject(this.playerShip);
 
         this.platform = new Platform(
@@ -93,7 +103,7 @@ class App {
         });
     }
 
-    run(timestamp) {
+    run(timestamp: number) {
         if (this.previousTime === null) {
             this.previousTime = timestamp;
         }
