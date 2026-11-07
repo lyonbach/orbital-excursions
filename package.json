@@ -17,5 +17,8 @@
   "bugs": {
     "url": "https://github.com/lyonbach/orbital-excursions-js/issues"
   },
-  "homepage": "https://github.com/lyonbach/orbital-excursions-js#readme"
+  "homepage": "https://github.com/lyonbach/orbital-excursions-js#readme",
+  "devDependencies": {
+    "typescript": "^7.0.2"
+  }
 }
