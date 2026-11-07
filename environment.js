@@ -5,9 +5,9 @@ class Environment {
         this.gravity = gravity;
     }
 
-    applyGravity(gameObject) {
+    applyGravity(gameObject, deltaTime) {
         if (typeof gameObject.velocity !== 'undefined') {
-            gameObject.velocity.addInPlace(this.gravity.scale(GASC));
+            gameObject.velocity.addInPlace(this.gravity.scale(GASC * deltaTime));
         }
     }
 }

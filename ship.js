@@ -1,6 +1,10 @@
 import Vector2 from './vector.js';
+import { RUPS } from './constants.js';
+
 /**
- * Ship class representing a spaceship in the game.
+ * Abstract base class for spaceship types. JavaScript does not enforce abstract
+ * classes, so subclasses must implement update().
+ * @abstract
  */
 class Ship {
     constructor(position, velocity) {
@@ -22,6 +26,12 @@ class Ship {
         this.angularThrustCapability = settings.angularThrustCapability ?? this.angularThrustCapability;
         this.thrustCapability = settings.thrustCapability ?? this.thrustCapability;
     }
+
+    /** @abstract */
+    update(deltaTime) {
+        throw new Error(`${this.constructor.name} must implement update(deltaTime).`);
+    };
+
 }
 
 
@@ -32,8 +42,11 @@ class ShipTypeA extends Ship {
     constructor(position, velocity) {
         super(position, velocity);
         this.set({  // TODO LATER FROM A JSON FILE
-            angularThrustCapability: (0.0002),
-            thrustCapability: new Vector2(0.005, 0.010)
+            angularThrustCapability: 0.0002 * RUPS ** 2,
+            thrustCapability: new Vector2(
+                0.005 * RUPS ** 2,
+                0.010 * RUPS ** 2
+            )
         });
 
         this.width = 30.0;
@@ -54,13 +67,13 @@ class ShipTypeA extends Ship {
         );
     }
 
-    update() {
-        this.angularVelocity += this.angularAcceleration;
-        this.angle += this.angularVelocity;
+    update(deltaTime) {
+        this.angularVelocity += this.angularAcceleration * deltaTime;
+        this.angle += this.angularVelocity * deltaTime;
 
         this.acceleration = this.calculateThrustVector();
-        this.velocity.addInPlace(this.acceleration);
-        this.position.addInPlace(this.velocity);
+        this.velocity.addInPlace(this.acceleration.scale(deltaTime));
+        this.position.addInPlace(this.velocity.scale(deltaTime));
 
     }
 

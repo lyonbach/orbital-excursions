@@ -1,5 +1,5 @@
 class Collision {
-    static sat(objectA, objectB, context){
+    static sat(objectA, objectB){
         const normalsA = objectA.getEdgeNormals();
         const normalsB = objectB.getEdgeNormals();
 

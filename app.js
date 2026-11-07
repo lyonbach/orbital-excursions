@@ -8,8 +8,9 @@ import Vector2 from './vector.js';
 class App {
     constructor(context) {
         this.run = this.run.bind(this);
-        this.context = context;
+        this.previousTime = null;
 
+        this.context = context;
         const canvas = context.canvas;
 
         this.resizeCanvas = () => {
@@ -43,8 +44,8 @@ class App {
         this.game.addGameObject(this.playerShip);
 
         this.platform = new Platform(
-            new Vector2(this.screenWidth / 4, this.screenHeight / 2),
-            this.screenWidth / 2,
+            new Vector2((this.screenWidth - 350) / 2, this.screenHeight / 2),
+            350,
             20
         );
 
@@ -92,16 +93,32 @@ class App {
         });
     }
 
-    run() {
-        // Physics and game logic update.
-        this.game.update();
+    run(timestamp) {
+        if (this.previousTime === null) {
+            this.previousTime = timestamp;
+        }
 
-        // Rendering update follows.
-        this.context.clearRect(0, 0, this.screenWidth, this.screenHeight);
+        // Convert milliseconds to seconds.
+        // Limit large jumps after a pause or inactive tab.
+        const deltaTime = Math.min(
+            (timestamp - this.previousTime) / 1000,
+            0.05
+        );
+
+        this.previousTime = timestamp;
+
+        this.game.update(deltaTime);
+
         this.context.fillStyle = "black";
-        this.context.fillRect(0, 0, this.screenWidth, this.screenHeight);
+        this.context.fillRect(
+            0,
+            0,
+            this.screenWidth,
+            this.screenHeight
+        );
 
         this.game.render(this.context);
+
         requestAnimationFrame(this.run);
     }
 }
