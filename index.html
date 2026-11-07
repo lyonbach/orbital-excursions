@@ -14,100 +14,13 @@
     </div>
 </body>
 <script type="module">
-    import Vector2 from './vector.js';
-    import { ShipTypeA } from './ship.js';
-    import Game from './game.js';
-    import { Earth, Moon } from './environment.js';
-    import { Platform } from './gameObject.js';
+    import App from './app.js';
 
-    
     const canvas = document.getElementById('gameArea');
     const context = canvas.getContext('2d');
     
-    let width, height;
-
-    function resizeCanvas() {
-        const dpr = window.devicePixelRatio || 1;
-        width = window.innerWidth;
-        height = window.innerHeight;
-        // The backing store is scaled by dpr so the picture stays sharp on HiDPI screens.
-        canvas.width = Math.round(width * dpr);
-        canvas.height = Math.round(height * dpr);
-        canvas.style.width = width + "px";
-        canvas.style.height = height + "px";
-        context.setTransform(dpr, 0, 0, dpr, 0, 0); // draw in CSS pixels
-    }
-    resizeCanvas();
-    window.addEventListener("resize", resizeCanvas);
-    
-    canvas.setAttribute("tabindex", "0"); // make canvas focusable
-    canvas.focus(); // set focus to the canvas so it can receive keyboard events
-
-    canvas.addEventListener("keydown", (e) => {
-        if (e.code === "KeyA") {
-            e.preventDefault();
-            playerShip.thrust.x = -playerShip.thrustCapability.x;
-        } else if (e.code === "KeyD") {
-            e.preventDefault();
-            playerShip.thrust.x = playerShip.thrustCapability.x;
-        } else if (e.code === "KeyW") {
-            e.preventDefault();
-            playerShip.thrust.y = playerShip.thrustCapability.y;
-        } else if (e.code === "KeyS") {
-            e.preventDefault();
-            // playerShip.thrust.y = -playerShip.thrustCapability.y;
-        } else if (e.code === "KeyQ") {
-            e.preventDefault();
-            playerShip.angularAcceleration = -playerShip.angularThrustCapability;
-        } else if (e.code === "KeyE") {
-            e.preventDefault();
-            playerShip.angularAcceleration =  playerShip.angularThrustCapability;
-        }
-    });
-
-
-    canvas.addEventListener("keyup", (e) => {
-        if (["KeyA", "KeyD"].includes(e.code)) {
-            e.preventDefault();
-            playerShip.thrust.x = 0;
-        }
-        if (["KeyW", "KeyS"].includes(e.code)) {
-            e.preventDefault();
-            playerShip.thrust.y = 0;
-        }
-        if (["KeyQ", "KeyE"].includes(e.code)) {
-            e.preventDefault();
-            playerShip.angularAcceleration = 0;
-        }
-    });
-
-
-    const game = new Game(context, new Moon());
-    const startPos = new Vector2(width/2, height/4);
-    const playerShip = new ShipTypeA(startPos, new Vector2(0, 0));
-    game.addGameObject(playerShip);
-
-    const platform = new Platform(new Vector2(width/4, height/2), width/2, 20);
-    game.addGameObject(platform);
-
-    function gameLoop() {
-
-        game.update();
-        context.clearRect(0, 0, width, height);
-
-        context.fillStyle = "black";
-        context.fillRect(0, 0, width, height);
-
-        game.update();
-        game.render(context);
-
-        requestAnimationFrame(gameLoop);
-    }
-    gameLoop();
-
-
-
-
+    const app = new App(context);
+    app.run();
 
 </script>
 
