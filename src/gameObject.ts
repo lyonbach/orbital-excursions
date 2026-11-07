@@ -201,18 +201,8 @@ class Ship extends DynamicObject implements Collidable {
     }
 
     override update(deltaTime: number): void {
-        this.angularVelocity += this.angularAcceleration * deltaTime;
-        this.angle += this.angularVelocity * deltaTime;
-
         this.acceleration = this.calculateThrustVector();
-
-        this.velocity.addInPlace(
-            this.acceleration.scale(deltaTime)
-        );
-
-        this.position.addInPlace(
-            this.velocity.scale(deltaTime)
-        );
+        super.update(deltaTime);
     }
 
     override render(context: CanvasRenderingContext2D): void {
