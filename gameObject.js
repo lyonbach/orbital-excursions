@@ -38,12 +38,10 @@ class Platform extends StaticObject {
         context.fillStyle = "gray";
         context.fillRect(this.position.x, this.position.y, this.width, this.height);
 
-        // FIXME TEMPORARY: Draw edge normals for debugging
-        const normals = this.getEdgeNormals();
-        const vertices = this.getVertices();
-        context.save();
-
         /** DEBUG: Draw edge normals for debugging
+        // const normals = this.getEdgeNormals();
+        // const vertices = this.getVertices();
+        // context.save();
         context.strokeStyle = "red";
         for (let i = 0; i < vertices.length; i++) {
             const this_v = vertices[i];
