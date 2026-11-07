@@ -1,7 +1,6 @@
 import Game from './game.js';
 import { Earth, Moon } from './environment.js';
-import { ShipTypeA } from './ship.js';
-import { Platform } from './gameObject.js';
+import { Ship, Platform } from './gameObject.js';
 import Vector2 from './vector.js';
 
 
@@ -40,7 +39,7 @@ class App {
             this.screenHeight / 4
         );
 
-        this.playerShip = new ShipTypeA(startPos, new Vector2(0, 0));
+        this.playerShip = new Ship(startPos, new Vector2(0, 0));
         this.game.addGameObject(this.playerShip);
 
         this.platform = new Platform(
