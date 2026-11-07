@@ -15,6 +15,7 @@ class GameObject implements Renderable {
     }
 }
 
+
 class StaticObject extends GameObject {
     position: Vector2;
 
@@ -24,32 +25,37 @@ class StaticObject extends GameObject {
     }
 }
 
+
 class DynamicObject extends GameObject {
     position: Vector2;
     velocity: Vector2;
-    acceleration: Vector2;
-    angularAcceleration: number;
+
+    acceleration: Vector2 = new Vector2();
+
+    angle: number = 0;
+    angularAcceleration: number = 0;
     angularVelocity: number = 0;
 
     constructor(position: Vector2, velocity: Vector2) {
         super();
         this.position = position;
         this.velocity = velocity;
-        this.acceleration = new Vector2();
-        this.angularAcceleration = 0;
     }
 
     update(deltaTime: number): void {
-        this.position.x += this.velocity.x * deltaTime;
-        this.position.y += this.velocity.y * deltaTime;
-
-        this.velocity.x += this.acceleration.x * deltaTime;
-        this.velocity.y += this.acceleration.y * deltaTime;
-
-        this.angularAcceleration += this.angularAcceleration * deltaTime;
         this.angularVelocity += this.angularAcceleration * deltaTime;
+        this.angle += this.angularVelocity * deltaTime;
+
+        this.velocity.addInPlace(
+            this.acceleration.scale(deltaTime)
+        );
+
+        this.position.addInPlace(
+            this.velocity.scale(deltaTime)
+        );
     }
 }
+
 
 class Platform extends StaticObject implements Collidable {
     width: number;
@@ -131,6 +137,7 @@ class Platform extends StaticObject implements Collidable {
         return normals;
     }
 }
+
 
 class Ship extends DynamicObject implements Collidable {
     width: number;
@@ -414,5 +421,6 @@ class Ship extends DynamicObject implements Collidable {
     }
 
 }
+
 
 export { Platform, Ship };
