@@ -147,14 +147,7 @@ class Ship extends DynamicObject implements Collidable {
     halfHeight: number;
     quarterHeight: number;
 
-    angle: number = 0;
-    angularVelocity: number = 0;
-
-    acceleration: Vector2 = new Vector2();
-    angularAcceleration: number = 0;
-
     thrust: Vector2 = new Vector2();
-
     angularThrustCapability: number = 0;
     thrustCapability: Vector2 = new Vector2();
 
