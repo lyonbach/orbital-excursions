@@ -19,6 +19,11 @@ class Game {
     update(deltaTime) {
         var platform = this.gameObjects[1];
         for (const gameObject of this.gameObjects) {
+
+            if (this.environment && typeof this.environment.applyGravity === 'function') {
+                this.environment.applyGravity(gameObject, deltaTime);
+            }
+
             if (typeof gameObject.update === 'function') {
                 gameObject.update(deltaTime);
 
@@ -26,9 +31,6 @@ class Game {
                     const ship = gameObject;
                     Collision.sat(ship, platform);
                 }
-            }
-            if (this.environment && typeof this.environment.applyGravity === 'function') {
-                this.environment.applyGravity(gameObject, deltaTime);
             }
         }
     }
