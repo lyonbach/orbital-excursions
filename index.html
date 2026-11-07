@@ -13,15 +13,5 @@
         <canvas id="gameArea" width="1024" height="1024"></canvas>
     </div>
 </body>
-<script type="module">
-    import App from './dist/app.js'
-
-    const canvas = document.getElementById('gameArea');
-    const context = canvas.getContext('2d');
-    
-    const app = new App(context);
-    requestAnimationFrame(app.run);
-
-</script>
-
+<script type="module" src="./dist/main.js"></script>
 </html>
