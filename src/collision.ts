@@ -64,8 +64,6 @@ class Collision {
             }
         }
 
-        // Your resolver expects the normal to point from the static
-        // object (objectB) toward the dynamic object (objectA).
         const centerA = Collision.centroid(verticesA);
         const centerB = Collision.centroid(verticesB);
 
@@ -80,38 +78,86 @@ class Collision {
             };
         }
 
+        // The ship vertex closest to the platform along the collision normal.
+        let contactVertex = verticesA[0];
+        let smallestProjection = Number.POSITIVE_INFINITY;
+
+        for (const vertex of verticesA) {
+            const projection =
+                vertex.x * collisionNormal.x +
+                vertex.y * collisionNormal.y;
+
+            if (projection < smallestProjection) {
+                smallestProjection = projection;
+                contactVertex = vertex;
+            }
+        }
+
         return {
             normal: collisionNormal,
-            penetrationDepth: smallestOverlap
+            penetrationDepth: smallestOverlap,
+            contactPoint: contactVertex
         };
     }
 
-    static resolveAgainstStatic(
-        dynamicObject: DynamicObject,
-        result: CollisionResult,
-        restitution: number
-    ): void {
-        const { normal, penetrationDepth } = result;
+static resolveAgainstStatic(
+    dynamicObject: DynamicObject,
+    result: CollisionResult,
+    restitution: number
+): void {
+    const {
+        normal,
+        penetrationDepth,
+        contactPoint
+    } = result;
 
-        // Separate the ship from the platform.
-        dynamicObject.position.x += normal.x * penetrationDepth;
-        dynamicObject.position.y += normal.y * penetrationDepth;
+    // Separate the ship from the platform.
+    dynamicObject.position.x += normal.x * penetrationDepth;
+    dynamicObject.position.y += normal.y * penetrationDepth;
 
-        const normalVelocity =
-            dynamicObject.velocity.x * normal.x +
-            dynamicObject.velocity.y * normal.y;
+    // Vector from the ship center to the contact point.
+    const rx = contactPoint.x - dynamicObject.position.x;
+    const ry = contactPoint.y - dynamicObject.position.y;
 
-        // Already stationary along the normal, or moving away.
-        if (normalVelocity >= 0) {
-            return;
-        }
+    // Cross product of the contact offset and collision normal.
+    // This determines how much torque the normal impulse produces.
+    const rn =
+        rx * normal.y - ry * normal.x;
 
-        const velocityChange =
-            -(1 + restitution) * normalVelocity;
+    // Velocity at the contact point:
+    // v_contact = v + omega cross r
+    const contactNormalVelocity =
+        dynamicObject.velocity.x * normal.x +
+        dynamicObject.velocity.y * normal.y +
+        dynamicObject.angularVelocity * rn;
 
-        dynamicObject.velocity.x += velocityChange * normal.x;
-        dynamicObject.velocity.y += velocityChange * normal.y;
+    // Already separating, or stationary along the normal.
+    if (contactNormalVelocity >= 0) {
+        return;
     }
+
+    // Impulse magnitude for unit mass. The rotational term makes an
+    // impact near the edge produce less linear velocity change and more
+    // angular velocity change.
+    const denominator =
+        dynamicObject.mass +
+        rn * rn * dynamicObject.inverseMomentOfInertia;
+
+    const normalImpulse =
+        -(1 + restitution) * contactNormalVelocity / denominator;
+
+    // Apply the linear part of the impulse.
+    dynamicObject.velocity.x += normal.x * normalImpulse;
+    dynamicObject.velocity.y += normal.y * normalImpulse;
+
+    // Apply the angular part: torque = r cross impulse.
+    const torque =
+        rx * (normal.y * normalImpulse) -
+        ry * (normal.x * normalImpulse);
+
+    dynamicObject.angularVelocity +=
+        torque * dynamicObject.inverseMomentOfInertia;
+}
 
     private static centroid(vertices: Point2[]): Point2 {
         let x = 0;

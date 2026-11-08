@@ -53,7 +53,7 @@ class Game {
                     Collision.resolveAgainstStatic(
                         gameObject,
                         collision,
-                        0.8 // FIXME GET THIS FROM THE COLLISION RESULT
+                        0.1 // FIXME GET THIS FROM THE COLLISION RESULT
                     );
                 }
             }

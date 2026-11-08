@@ -35,6 +35,7 @@ export interface Collidable {
 export interface CollisionResult {
     normal: Point2;
     penetrationDepth: number;
+    contactPoint: Point2;
 }
 
 

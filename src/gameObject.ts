@@ -31,10 +31,12 @@ class DynamicObject extends GameObject {
     velocity: Vector2;
 
     acceleration: Vector2 = new Vector2();
-
     angle: number = 0;
     angularAcceleration: number = 0;
     angularVelocity: number = 0;
+
+    mass: number = 1;
+    inverseMomentOfInertia: number = 1;
 
     constructor(position: Vector2, velocity: Vector2) {
         super();
@@ -162,13 +164,19 @@ class Ship extends DynamicObject implements Collidable {
             )
         });
 
+        
         this.width = 30;
         this.halfWidth = this.width / 2;
         this.quarterWidth = this.width / 4;
-
+        
         this.height = 30;
         this.halfHeight = this.height / 2;
         this.quarterHeight = this.height / 4;
+
+        const momentOfInertia =  // FIXME GET THIS FROM THE SETTINGS
+            (this.width * this.width + this.height * this.height) / 12;
+
+        this.inverseMomentOfInertia = 1 / momentOfInertia;
     }
 
     setShipSettings(settings: ShipSettings): void {
