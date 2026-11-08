@@ -103,7 +103,8 @@ class Collision {
 static resolveAgainstStatic(
     dynamicObject: DynamicObject,
     result: CollisionResult,
-    restitution: number
+    restitution: number,
+    friction: number
 ): void {
     const {
         normal,
@@ -157,6 +158,53 @@ static resolveAgainstStatic(
 
     dynamicObject.angularVelocity +=
         torque * dynamicObject.inverseMomentOfInertia;
+
+    // Tangent direction: perpendicular to the collision normal.
+    const tangent = {
+        x: -normal.y,
+        y: normal.x
+    };
+
+    // Cross product of the contact offset and tangent.
+    // This determines the torque produced by the friction impulse.
+    const rt =
+        rx * tangent.y - ry * tangent.x;
+
+    // Velocity at the contact point along the tangent:
+    // v_contact = v + omega cross r
+    const contactTangentVelocity =
+        dynamicObject.velocity.x * tangent.x +
+        dynamicObject.velocity.y * tangent.y +
+        dynamicObject.angularVelocity * rt;
+
+    // Impulse magnitude for unit mass.
+    const tangentDenominator =
+        dynamicObject.mass +
+        rt * rt * dynamicObject.inverseMomentOfInertia;
+
+    let tangentImpulse =
+        -contactTangentVelocity / tangentDenominator;
+
+    // Coulomb friction limit: friction cannot exceed mu * normal impulse.
+    const maximumFrictionImpulse =
+        friction * Math.abs(normalImpulse);
+
+    tangentImpulse = Math.max(
+        -maximumFrictionImpulse,
+        Math.min(maximumFrictionImpulse, tangentImpulse)
+    );
+
+    // Apply the linear part of friction.
+    dynamicObject.velocity.x += tangent.x * tangentImpulse;
+    dynamicObject.velocity.y += tangent.y * tangentImpulse;
+
+    // Apply the angular part of friction.
+    const frictionTorque =
+        rx * (tangent.y * tangentImpulse) -
+        ry * (tangent.x * tangentImpulse);
+
+    dynamicObject.angularVelocity +=
+        frictionTorque * dynamicObject.inverseMomentOfInertia;
 }
 
     private static centroid(vertices: Point2[]): Point2 {
