@@ -406,4 +406,4 @@ class Ship extends DynamicObject implements Collidable {
 }
 
 
-export { Platform, Ship };
+export { Platform, Ship, DynamicObject, StaticObject};

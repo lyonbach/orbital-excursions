@@ -45,11 +45,17 @@ class Game {
                 gameObject.update(deltaTime);
             }
 
-            if (
-                gameObject instanceof Ship &&
-                this.platform !== null
-            ) {
-                Collision.sat(gameObject, this.platform);
+            if (gameObject instanceof Ship && this.platform !== null) 
+            {
+                let collision = Collision.sat(gameObject, this.platform);
+                if (collision !== null) {
+                    console.debug("Collision result:", collision);
+                    Collision.resolveAgainstStatic(
+                        gameObject,
+                        collision,
+                        0.8 // FIXME GET THIS FROM THE COLLISION RESULT
+                    );
+                }
             }
         }
     }

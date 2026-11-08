@@ -1,9 +1,11 @@
 import Vector2 from "./vector";
 
+
 export interface Point2 {
     x: number;
     y: number;
 }
+
 
 export interface AABB {
     minX: number;
@@ -12,19 +14,29 @@ export interface AABB {
     maxY: number;
 }
 
+
 export interface Renderable {
     render(context: CanvasRenderingContext2D): void;
 }
 
+
 export interface Updatable {
     update(deltaTime: number): void;
 }
+
 
 export interface Collidable {
     getVertices(): Point2[];
     getEdgeNormals(): Point2[];
     getAABB(): AABB;
 }
+
+
+export interface CollisionResult {
+    normal: Point2;
+    penetrationDepth: number;
+}
+
 
 export interface ShipSettings {
     thrust?: Vector2;
