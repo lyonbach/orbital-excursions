@@ -43,7 +43,7 @@ class App {
 
         window.addEventListener("resize", this.resizeCanvas);
 
-        this.game = new Game(context, new Moon());
+        this.game = new Game(context, new Earth());
 
         const startPos = new Vector2(
             this.screenWidth / 2,
