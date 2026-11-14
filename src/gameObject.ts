@@ -4,6 +4,7 @@ import type {
     Collidable,
     Point2,
     Renderable,
+    LandingGearContact,
     ShipSettings
 } from './types.js';
 import { RUPS } from './constants.js';
@@ -55,6 +56,28 @@ class DynamicObject extends GameObject {
         this.position.addInPlace(
             this.velocity.scale(deltaTime)
         );
+    }
+
+    applyForceAtPoint(force: Vector2, point: Point2, deltaTime: number): void {
+        const inverseMass = 1 / this.mass;
+        this.velocity.x += force.x * inverseMass * deltaTime;
+        this.velocity.y += force.y * inverseMass * deltaTime;
+
+        const rX = point.x - this.position.x;
+        const rY = point.y - this.position.y;
+
+        const torque = rX * force.y - rY * force.x;
+        this.angularVelocity += torque * this.inverseMomentOfInertia * deltaTime;
+    }
+
+    getVelocityAtPoint(worldPoint: Point2): Point2 {
+        const rX = worldPoint.x - this.position.x;
+        const rY = worldPoint.y - this.position.y;
+
+        return {
+            x: this.velocity.x - this.angularVelocity * rY,
+            y: this.velocity.y + this.angularVelocity * rX
+        };
     }
 }
 
@@ -157,9 +180,20 @@ class Ship extends DynamicObject implements Collidable {
     landingGearTarget: number = 0;
     landingGearSpeed: number = 0.5;
 
-    landingGearSpan: number = 22;
-    landingGearLength: number = 5;
+    landingGearSpan: number = 20;
+    landingGearLength: number = 10;
     landingGearFootRadius: number = 3;
+
+    landingGearSuspensionTravel: number = 5;
+    landingGearSuspensionStiffness: number = 0.5;
+    landingGearSuspensionDamping: number = 0.1;
+
+    landingGearCompressionLeft: number = 0;
+    landingGearCompressionRight: number = 0;
+    // landingGearCompressionCenter: number = 0;  // Add this later
+
+
+
 
     constructor(position: Vector2, velocity: Vector2) {
         super(position, velocity);
@@ -350,6 +384,124 @@ class Ship extends DynamicObject implements Collidable {
         context.fill();
     }
 
+    private calculateSuspensionForce(compression: number, compressionSpeed: number): number {
+        if (compression <= 0) {
+            return 0;
+        }
+        const springForce = this.landingGearSuspensionStiffness * compression;
+        const dampingForce = this.landingGearSuspensionDamping * compressionSpeed;
+        return Math.max(0, springForce + dampingForce);
+    }
+
+    private getLandingFootLocal(side: number= -1 | 1, compressionOverride?: number): Point2 {
+        const extension = this.landingGearExtension;
+        const compression = compressionOverride ?? (side === -1 ? this.landingGearCompressionLeft : this.landingGearCompressionRight);
+        const maximumCompression = this.landingGearSuspensionTravel * extension;
+        const clampedCompression = Math.max(0, Math.min(compression, maximumCompression));
+
+        return {
+            x: side * this.landingGearSpan * extension,
+            y: this.halfHeight + this.landingGearLength * extension - clampedCompression
+        }
+    }
+
+    private getLandingGearFootWorld(side: number= -1 | 1, compressionOverride?: number): Point2 {
+        const local = this.getLandingFootLocal(side, compressionOverride);
+        const cos = Math.cos(this.angle);
+        const sin = Math.sin(this.angle);
+
+        return {
+            x: this.position.x + local.x * cos - local.y * sin,
+            y: this.position.y + local.x * sin + local.y * cos
+        };
+    }
+
+    private getLandingGearContact(side: number= -1 | 1, platform: Platform): LandingGearContact | null {
+        const extension = this.landingGearExtension;
+        if (extension <= 0) {
+            return null;
+        }
+        
+        const sin = Math.sin(this.angle);
+        const cos = Math.cos(this.angle);
+
+        if (cos <= 0) {
+            return null;
+        }
+
+        const restingFoot = this.getLandingGearFootWorld(side);
+        const platformTop = platform.position.y;
+        const platformLeft = platform.position.x;
+        const platformRight = platformLeft + platform.width;
+
+        const overlap = restingFoot.y - platformTop;
+        if (overlap < 0) {
+            return null;
+        }
+
+        const requiredCompression = overlap / cos;
+        const contactX = restingFoot.x + sin * requiredCompression;
+        if (contactX < platformLeft || contactX > platformRight) {
+            return null;
+        }
+
+        const maximumCompression = this.landingGearSuspensionTravel * extension;
+        const compression = Math.min(requiredCompression, maximumCompression);
+
+        return {
+            point: {
+                x: contactX,
+                y: platformTop
+            },
+
+            normal: {
+                x: 0,
+                y: -1
+            },
+
+            compression,
+            requiredCompression,
+            bottomedOut: requiredCompression > maximumCompression
+        };
+    }
+
+    applyLandingGearSuspension(platform: Platform, deltaTime: number): void {
+        const contacts = ([-1, 1] as const).map(side => {
+            const contact = this.getLandingGearContact(side, platform);
+            if (contact === null) {
+                return {side, contact, force: 0};
+            }
+            const velocity = this.getVelocityAtPoint(contact.point);
+            const compressionSpeed = velocity.y / Math.cos(this.angle);
+            const springForce = this.calculateSuspensionForce(contact.compression, compressionSpeed);
+            
+            // Convert the axial spring force to vertical force
+            const force = springForce / Math.cos(this.angle);
+            return {side, contact, force};
+        });
+
+        for (const {side, contact, force} of contacts) {
+            const compression = contact?.compression ?? 0;
+
+            if (side === -1) {
+                this.landingGearCompressionLeft = compression;
+            } else if (side === 1) {
+                this.landingGearCompressionRight = compression;
+            }
+            if (contact === null || force <= 0) {
+                continue;
+            }
+
+            this.applyForceAtPoint(
+                new Vector2(
+                    contact.normal.x * force,
+                    contact.normal.y * force),
+                    contact.point,
+                    deltaTime
+            );
+        }
+    }
+
     private renderLandingGear(
         context: CanvasRenderingContext2D
     ): void {
@@ -359,8 +511,8 @@ class Ship extends DynamicObject implements Collidable {
             return;
         }
 
-        const legLength = this.landingGearLength * extension;
-        const legSpan = this.landingGearSpan * extension;
+        // const legLength = this.landingGearLength * extension;
+        // const legSpan = this.landingGearSpan * extension;
 
         context.strokeStyle = "#c8c8c8";
         context.lineWidth = 3;
@@ -370,18 +522,17 @@ class Ship extends DynamicObject implements Collidable {
             const hipX = side * this.halfWidth * 0.55;
             const hipY = this.halfHeight * 0.55;
 
-            const footX = side * legSpan;
-            const footY = this.halfHeight + legLength;
+            const foot = this.getLandingFootLocal(side);
 
             context.beginPath();
             context.moveTo(hipX, hipY);
-            context.lineTo(footX, footY);
+            context.lineTo(foot.x, foot.y);
             context.stroke();
 
             context.beginPath();
             context.arc(
-                footX,
-                footY,
+                foot.x,
+                foot.y,
                 this.landingGearFootRadius,
                 0,
                 Math.PI * 2
@@ -391,6 +542,7 @@ class Ship extends DynamicObject implements Collidable {
             context.fill();
         }
     }
+
     setShipSettings(settings: ShipSettings): void {
         this.thrust = settings.thrust ?? this.thrust;
 
@@ -423,20 +575,20 @@ class Ship extends DynamicObject implements Collidable {
             { x: -this.halfWidth, y: this.halfHeight }
         ];
 
-        if (this.landingGearExtension > 0) {
-            const legLength =
-                this.landingGearLength * this.landingGearExtension;
+        // if (this.landingGearExtension > 0) {
+        //     const legLength =
+        //         this.landingGearLength * this.landingGearExtension;
 
-            const legSpan =
-                this.landingGearSpan * this.landingGearExtension;
+        //     const legSpan =
+        //         this.landingGearSpan * this.landingGearExtension;
 
-            const footY = this.halfHeight + legLength;
+        //     const footY = this.halfHeight + legLength;
 
-            localVertices.push(
-                { x: -legSpan, y: footY },
-                { x: legSpan, y: footY }
-            );
-        }
+        //     localVertices.push(
+        //         { x: -legSpan, y: footY },
+        //         { x: legSpan, y: footY }
+        //     );
+        // }
 
         return localVertices.map((vertex): Point2 => {
             const rx = vertex.x * cos - vertex.y * sin;

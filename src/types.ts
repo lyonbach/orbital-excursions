@@ -44,3 +44,11 @@ export interface ShipSettings {
     angularThrustCapability?: number;
     thrustCapability?: Vector2;
 }
+
+export interface LandingGearContact {
+    point: Point2;
+    normal: Point2;
+    compression: number;
+    requiredCompression: number;
+    bottomedOut: boolean;
+}

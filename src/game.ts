@@ -36,26 +36,39 @@ class Game {
     }
 
     update(deltaTime: number): void {
+        if (!Number.isFinite(deltaTime) || deltaTime < 0) { return; }
+        const maximumStep = 1 / 240;
+        const maxiumFrameTime = 0.1;
+
+        const frameTime = Math.min(deltaTime, maxiumFrameTime);
+        const stepCount = Math.ceil(frameTime / maximumStep);
+        const stepTime = frameTime / stepCount;
+
+        for (let i = 0; i < stepCount; i++) {
+            this.updatePhysics(stepTime);
+        }
+    }
+
+    private updatePhysics(deltaTime: number): void {
         for (const gameObject of this.gameObjects) {
             if (this.environment !== null) {
                 this.environment.applyGravity(gameObject, deltaTime);
             }
 
-            if (gameObject.update !== undefined) {
+            if (gameObject instanceof Ship && this.platform !== null) {
+                gameObject.applyLandingGearSuspension(this.platform, deltaTime);
+                console.debug("HERE");
+            }
+
+            if (gameObject.update !== undefined){
                 gameObject.update(deltaTime);
             }
 
-            if (gameObject instanceof Ship && this.platform !== null) 
-            {
-                let collision = Collision.sat(gameObject, this.platform);
+            // Collision response (hull only)
+            if (gameObject instanceof Ship && this.platform !== null) {
+                const collision = Collision.sat(gameObject, this.platform);
                 if (collision !== null) {
-                    console.debug("Collision result:", collision);
-                    Collision.resolveAgainstStatic(
-                        gameObject,
-                        collision,
-                        0.1,  // restitution
-                        0.5   // friction GATHER THESE VALUES FROM THE COLLISION RESULT OR SETTINGS FIXME
-                    );
+                    Collision.resolveAgainstStatic(gameObject, collision, 0.1, 0.5);
                 }
             }
         }
