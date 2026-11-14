@@ -2,12 +2,12 @@
   "name": "orbital-excursions-js",
   "version": "1.0.0",
   "description": "",
-  "main": "collision.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "build": "tsc",
     "watch": "tsc --watch",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "start": "http-server ."
   },
   "repository": {
     "type": "git",
@@ -22,6 +22,7 @@
   },
   "homepage": "https://github.com/lyonbach/orbital-excursions-js#readme",
   "devDependencies": {
+    "http-server": "^14.1.1",
     "typescript": "^7.0.2"
   }
 }
