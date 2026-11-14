@@ -305,28 +305,28 @@ class Ship extends DynamicObject implements Collidable {
                 this,
                 this.halfWidth,
                 this.quarterHeight,
-                false
+                true
             );
 
             renderLateralThruster(
                 this,
                 this.quarterWidth / 2,
                 -this.height * 0.88,
-                true
+                false
             );
         } else if (this.angularAcceleration < 0) {
             renderLateralThruster(
                 this,
                 this.halfWidth,
                 this.quarterHeight,
-                true
+                false
             );
 
             renderLateralThruster(
                 this,
                 this.quarterWidth / 2,
                 -this.height * 0.88,
-                false
+                true
             );
         }
 
@@ -411,7 +411,6 @@ class Ship extends DynamicObject implements Collidable {
             sin * this.thrust.y + cos * this.thrust.x
         );
     }
-
 
     getVertices(): Point2[] {
         const cos = Math.cos(this.angle);
