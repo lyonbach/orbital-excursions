@@ -185,8 +185,9 @@ class Ship extends DynamicObject implements Collidable {
     landingGearFootRadius: number = 3;
 
     landingGearSuspensionTravel: number = 10;
-    landingGearSuspensionStiffness: number = 5;
+    landingGearSuspensionStiffness: number = 10;
     landingGearSuspensionDamping: number = 3;
+    landingGearFriction: number = .7;
 
     landingGearCompressionLeft: number = 0;
     landingGearCompressionRight: number = 0;
@@ -421,7 +422,7 @@ class Ship extends DynamicObject implements Collidable {
         if (extension <= 0) {
             return null;
         }
-        
+
         const sin = Math.sin(this.angle);
         const cos = Math.cos(this.angle);
 
@@ -438,7 +439,7 @@ class Ship extends DynamicObject implements Collidable {
             restingFoot.y +
     this.landingGearFootRadius -
     platformTop;
-        
+
         if (overlap < 0) {
             return null;
         }
@@ -478,7 +479,7 @@ class Ship extends DynamicObject implements Collidable {
             const velocity = this.getVelocityAtPoint(contact.point);
             const compressionSpeed = velocity.y / Math.cos(this.angle);
             const springForce = this.calculateSuspensionForce(contact.compression, compressionSpeed);
-            
+
             // Convert the axial spring force to vertical force
             const force = springForce / Math.cos(this.angle);
             return {side, contact, force};
@@ -496,6 +497,18 @@ class Ship extends DynamicObject implements Collidable {
                 continue;
             }
 
+        for (const { contact, force } of contacts) {
+            if (contact === null || force <= 0) {
+                continue;
+            }
+
+            this.applyLandingGearFriction(
+                    contact,
+                    force,
+                    deltaTime
+                );
+            }
+
             this.applyForceAtPoint(
                 new Vector2(
                     contact.normal.x * force,
@@ -504,6 +517,59 @@ class Ship extends DynamicObject implements Collidable {
                     deltaTime
             );
         }
+    }
+
+    private applyLandingGearFriction(
+        contact: LandingGearContact,
+        normalForce: number,
+        deltaTime: number
+    ): void {
+        if (normalForce <= 0 || deltaTime <= 0) {
+            return;
+        }
+
+        const tangent = {
+            x: -contact.normal.y,
+            y: contact.normal.x
+        };
+
+        const velocity = this.getVelocityAtPoint(contact.point);
+
+        const tangentVelocity =
+            velocity.x * tangent.x +
+            velocity.y * tangent.y;
+
+        const rx = contact.point.x - this.position.x;
+        const ry = contact.point.y - this.position.y;
+
+        const rt = rx * tangent.y - ry * tangent.x;
+
+        const inverseEffectiveMass =
+            1 / this.mass +
+            rt * rt * this.inverseMomentOfInertia;
+
+        // Impulse needed to stop sliding at this contact.
+        const stoppingImpulse =
+            -tangentVelocity / inverseEffectiveMass;
+
+        // Coulomb friction budget for this physics step.
+        const maximumImpulse =
+            this.landingGearFriction * normalForce * deltaTime;
+
+        const frictionImpulse = Math.max(
+            -maximumImpulse,
+            Math.min(maximumImpulse, stoppingImpulse)
+        );
+
+        // Existing helper accepts force, so convert impulse to force.
+        this.applyForceAtPoint(
+            new Vector2(
+                tangent.x * frictionImpulse / deltaTime,
+                tangent.y * frictionImpulse / deltaTime
+            ),
+            contact.point,
+            deltaTime
+        );
     }
 
     private renderLandingGear(

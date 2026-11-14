@@ -57,7 +57,6 @@ class Game {
 
             if (gameObject instanceof Ship && this.platform !== null) {
                 gameObject.applyLandingGearSuspension(this.platform, deltaTime);
-                console.debug("HERE");
             }
 
             if (gameObject.update !== undefined){
@@ -71,6 +70,7 @@ class Game {
                     Collision.resolveAgainstStatic(gameObject, collision, 0.1, 0.5);
                 }
             }
+
         }
     }
 
