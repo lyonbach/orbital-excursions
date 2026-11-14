@@ -181,11 +181,11 @@ class Ship extends DynamicObject implements Collidable {
     landingGearSpeed: number = 0.5;
 
     landingGearSpan: number = 20;
-    landingGearLength: number = 10;
+    landingGearLength: number = 20;
     landingGearFootRadius: number = 3;
 
-    landingGearSuspensionTravel: number = 10;
-    landingGearSuspensionStiffness: number = 10;
+    landingGearSuspensionTravel: number = 21;
+    landingGearSuspensionStiffness: number = 20;
     landingGearSuspensionDamping: number = 3;
     landingGearFriction: number = .7;
 
@@ -203,7 +203,7 @@ class Ship extends DynamicObject implements Collidable {
             angularThrustCapability: 0.0002 * RUPS ** 2,
             thrustCapability: new Vector2(
                 0.005 * RUPS ** 2,
-                0.010 * RUPS ** 2
+                0.020 * RUPS ** 2
             )
         });
 
