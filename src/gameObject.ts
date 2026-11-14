@@ -153,6 +153,14 @@ class Ship extends DynamicObject implements Collidable {
     angularThrustCapability: number = 0;
     thrustCapability: Vector2 = new Vector2();
 
+    landingGearExtension: number = 0;  // landingGearExtension ranges from 0 (fully retracted) to 1 (fully deployed).
+    landingGearTarget: number = 0;
+    landingGearSpeed: number = 0.5;
+
+    landingGearSpan: number = 22;
+    landingGearLength: number = 5;
+    landingGearFootRadius: number = 3;
+
     constructor(position: Vector2, velocity: Vector2) {
         super(position, velocity);
 
@@ -164,11 +172,11 @@ class Ship extends DynamicObject implements Collidable {
             )
         });
 
-        
+
         this.width = 30;
         this.halfWidth = this.width / 2;
         this.quarterWidth = this.width / 4;
-        
+
         this.height = 30;
         this.halfHeight = this.height / 2;
         this.quarterHeight = this.height / 4;
@@ -179,29 +187,24 @@ class Ship extends DynamicObject implements Collidable {
         this.inverseMomentOfInertia = 1 / momentOfInertia;
     }
 
-    setShipSettings(settings: ShipSettings): void {
-        this.thrust = settings.thrust ?? this.thrust;
-
-        this.angularThrustCapability =
-            settings.angularThrustCapability ??
-            this.angularThrustCapability;
-
-        this.thrustCapability =
-            settings.thrustCapability ?? this.thrustCapability;
-    }
-
-
-    calculateThrustVector(): Vector2 {
-        const cos = Math.cos(this.angle - Math.PI / 2);
-        const sin = Math.sin(this.angle - Math.PI / 2);
-
-        return new Vector2(
-            cos * this.thrust.y - sin * this.thrust.x,
-            sin * this.thrust.y + cos * this.thrust.x
-        );
-    }
-
     override update(deltaTime: number): void {
+
+        // Landing gear control: extend or retract based on the target position.
+        const direction = Math.sign(
+            this.landingGearTarget - this.landingGearExtension
+        );
+
+        if (direction !== 0) {
+            this.landingGearExtension = Math.max(
+                0,
+                Math.min(
+                    1,
+                    this.landingGearExtension +
+                    direction * this.landingGearSpeed * deltaTime
+                )
+            );
+        }
+
         this.acceleration = this.calculateThrustVector();
         super.update(deltaTime);
     }
@@ -250,7 +253,7 @@ class Ship extends DynamicObject implements Collidable {
             context.fill();
         }
 
-        function drawLateralThruster(
+        function renderLateralThruster(
             self: Ship,
             x: number,
             y: number,
@@ -282,14 +285,14 @@ class Ship extends DynamicObject implements Collidable {
         }
 
         if (this.thrust.x !== 0) {
-            drawLateralThruster(
+            renderLateralThruster(
                 this,
                 this.halfWidth,
                 this.quarterHeight,
                 true
             );
 
-            drawLateralThruster(
+            renderLateralThruster(
                 this,
                 this.quarterWidth / 2,
                 -this.height * 0.88,
@@ -298,28 +301,28 @@ class Ship extends DynamicObject implements Collidable {
         }
 
         if (this.angularAcceleration > 0) {
-            drawLateralThruster(
+            renderLateralThruster(
                 this,
                 this.halfWidth,
                 this.quarterHeight,
                 false
             );
 
-            drawLateralThruster(
+            renderLateralThruster(
                 this,
                 this.quarterWidth / 2,
                 -this.height * 0.88,
                 true
             );
         } else if (this.angularAcceleration < 0) {
-            drawLateralThruster(
+            renderLateralThruster(
                 this,
                 this.halfWidth,
                 this.quarterHeight,
                 true
             );
 
-            drawLateralThruster(
+            renderLateralThruster(
                 this,
                 this.quarterWidth / 2,
                 -this.height * 0.88,
@@ -327,33 +330,116 @@ class Ship extends DynamicObject implements Collidable {
             );
         }
 
-        context.beginPath();
+        this.renderLandingGear(context);
+        this.renderHull(context);
+        context.restore();
+    }
 
+    private renderHull(
+        context: CanvasRenderingContext2D,
+        color: string = "gray"
+    ): void {
+        context.beginPath();
         context.moveTo(-2, -this.height);
         context.lineTo(2, -this.height);
         context.lineTo(this.halfWidth, this.halfHeight);
         context.lineTo(-this.halfWidth, this.halfHeight);
-
         context.closePath();
 
-        context.fillStyle = "gray";
+        context.fillStyle = color;
         context.fill();
-
-        context.restore();
     }
+
+    private renderLandingGear(
+        context: CanvasRenderingContext2D
+    ): void {
+        const extension = this.landingGearExtension;
+
+        if (extension <= 0) {
+            return;
+        }
+
+        const legLength = this.landingGearLength * extension;
+        const legSpan = this.landingGearSpan * extension;
+
+        context.strokeStyle = "#c8c8c8";
+        context.lineWidth = 3;
+        context.lineCap = "round";
+
+        for (const side of [-1, 1]) {
+            const hipX = side * this.halfWidth * 0.55;
+            const hipY = this.halfHeight * 0.55;
+
+            const footX = side * legSpan;
+            const footY = this.halfHeight + legLength;
+
+            context.beginPath();
+            context.moveTo(hipX, hipY);
+            context.lineTo(footX, footY);
+            context.stroke();
+
+            context.beginPath();
+            context.arc(
+                footX,
+                footY,
+                this.landingGearFootRadius,
+                0,
+                Math.PI * 2
+            );
+
+            context.fillStyle = "#e0e0e0";
+            context.fill();
+        }
+    }
+    setShipSettings(settings: ShipSettings): void {
+        this.thrust = settings.thrust ?? this.thrust;
+
+        this.angularThrustCapability =
+            settings.angularThrustCapability ??
+            this.angularThrustCapability;
+
+        this.thrustCapability =
+            settings.thrustCapability ?? this.thrustCapability;
+    }
+
+    calculateThrustVector(): Vector2 {
+        const cos = Math.cos(this.angle - Math.PI / 2);
+        const sin = Math.sin(this.angle - Math.PI / 2);
+
+        return new Vector2(
+            cos * this.thrust.y - sin * this.thrust.x,
+            sin * this.thrust.y + cos * this.thrust.x
+        );
+    }
+
 
     getVertices(): Point2[] {
         const cos = Math.cos(this.angle);
         const sin = Math.sin(this.angle);
 
-        const vertices: Point2[] = [
+        const localVertices: Point2[] = [
             { x: -2, y: -this.height },
             { x: 2, y: -this.height },
             { x: this.halfWidth, y: this.halfHeight },
             { x: -this.halfWidth, y: this.halfHeight }
         ];
 
-        return vertices.map((vertex): Point2 => {
+        if (this.landingGearExtension > 0) {
+            const legLength =
+                this.landingGearLength * this.landingGearExtension;
+
+            const legSpan =
+                this.landingGearSpan * this.landingGearExtension;
+
+            const footY = this.halfHeight + legLength;
+
+            localVertices.push(
+                { x: -legSpan, y: footY },
+                { x: legSpan, y: footY }
+            );
+        }
+
+        return localVertices.map((vertex): Point2 => {
             const rx = vertex.x * cos - vertex.y * sin;
             const ry = vertex.x * sin + vertex.y * cos;
 
@@ -411,7 +497,11 @@ class Ship extends DynamicObject implements Collidable {
         return { minX, minY, maxX, maxY };
     }
 
+    setLandingGear(deployed: boolean): void {
+        this.landingGearTarget = deployed ? 1 : 0;
+    }
+
 }
 
 
-export { Platform, Ship, DynamicObject, StaticObject};
+export { Platform, Ship, DynamicObject, StaticObject };

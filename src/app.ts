@@ -85,6 +85,12 @@ class App {
                 event.preventDefault();
                 this.playerShip.angularAcceleration = this.playerShip.angularThrustCapability;
             }
+            else if (event.code === "KeyG") {
+                event.preventDefault();
+                this.playerShip.setLandingGear(
+                    this.playerShip.landingGearTarget < 0.5
+                );
+            }
         });
 
         canvas.addEventListener("keyup", (e) => {
