@@ -184,9 +184,9 @@ class Ship extends DynamicObject implements Collidable {
     landingGearLength: number = 10;
     landingGearFootRadius: number = 3;
 
-    landingGearSuspensionTravel: number = 5;
-    landingGearSuspensionStiffness: number = 0.5;
-    landingGearSuspensionDamping: number = 0.1;
+    landingGearSuspensionTravel: number = 10;
+    landingGearSuspensionStiffness: number = 5;
+    landingGearSuspensionDamping: number = 3;
 
     landingGearCompressionLeft: number = 0;
     landingGearCompressionRight: number = 0;
@@ -429,12 +429,16 @@ class Ship extends DynamicObject implements Collidable {
             return null;
         }
 
-        const restingFoot = this.getLandingGearFootWorld(side);
+        const restingFoot = this.getLandingGearFootWorld(side, 0);
         const platformTop = platform.position.y;
         const platformLeft = platform.position.x;
         const platformRight = platformLeft + platform.width;
 
-        const overlap = restingFoot.y - platformTop;
+        const overlap =
+            restingFoot.y +
+    this.landingGearFootRadius -
+    platformTop;
+        
         if (overlap < 0) {
             return null;
         }
