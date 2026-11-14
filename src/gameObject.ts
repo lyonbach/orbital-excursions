@@ -426,7 +426,12 @@ class Ship extends DynamicObject implements Collidable {
         const sin = Math.sin(this.angle);
         const cos = Math.cos(this.angle);
 
-        if (cos <= 0) {
+        // Suspension supports landings, not near-sideways impacts.
+        // Require the local downward axis to be within 60 degrees
+        // of world downward.
+        const minimumSupportAlignment = 0.5;
+
+        if (cos < minimumSupportAlignment) {
             return null;
         }
 
@@ -435,10 +440,7 @@ class Ship extends DynamicObject implements Collidable {
         const platformLeft = platform.position.x;
         const platformRight = platformLeft + platform.width;
 
-        const overlap =
-            restingFoot.y +
-    this.landingGearFootRadius -
-    platformTop;
+        const overlap = restingFoot.y + this.landingGearFootRadius - platformTop;
 
         if (overlap < 0) {
             return null;
@@ -451,6 +453,16 @@ class Ship extends DynamicObject implements Collidable {
         }
 
         const maximumCompression = this.landingGearSuspensionTravel * extension;
+
+        // Small allowance for discrete stepping at the travel limit.
+        const compressionTolerance = 0.1;
+
+        if (
+            requiredCompression > maximumCompression + compressionTolerance
+        ) {
+            return null;
+        }
+
         const compression = Math.min(requiredCompression, maximumCompression);
 
         return {
@@ -470,51 +482,69 @@ class Ship extends DynamicObject implements Collidable {
         };
     }
 
-    applyLandingGearSuspension(platform: Platform, deltaTime: number): void {
+    applyLandingGearSuspension(
+        platform: Platform,
+        deltaTime: number
+    ): void {
+        if (deltaTime <= 0) {
+            return;
+        }
+
         const contacts = ([-1, 1] as const).map(side => {
             const contact = this.getLandingGearContact(side, platform);
-            if (contact === null) {
-                return {side, contact, force: 0};
-            }
-            const velocity = this.getVelocityAtPoint(contact.point);
-            const compressionSpeed = velocity.y / Math.cos(this.angle);
-            const springForce = this.calculateSuspensionForce(contact.compression, compressionSpeed);
 
-            // Convert the axial spring force to vertical force
-            const force = springForce / Math.cos(this.angle);
-            return {side, contact, force};
+            if (contact === null) {
+                return { side, contact, force: 0 };
+            }
+
+            const cos = Math.cos(this.angle);
+            const velocity = this.getVelocityAtPoint(contact.point);
+            const compressionSpeed = velocity.y / cos;
+
+            const springForce = this.calculateSuspensionForce(
+                contact.compression,
+                compressionSpeed
+            );
+
+            const force = springForce / cos;
+
+            return { side, contact, force };
         });
 
-        for (const {side, contact, force} of contacts) {
+        // First apply normal support from both legs.
+        for (const { side, contact, force } of contacts) {
             const compression = contact?.compression ?? 0;
 
             if (side === -1) {
                 this.landingGearCompressionLeft = compression;
-            } else if (side === 1) {
+            } else {
                 this.landingGearCompressionRight = compression;
             }
+
             if (contact === null || force <= 0) {
                 continue;
             }
 
+            this.applyForceAtPoint(
+                new Vector2(
+                    contact.normal.x * force,
+                    contact.normal.y * force
+                ),
+                contact.point,
+                deltaTime
+            );
+        }
+
+        // Then apply friction once per foot.
         for (const { contact, force } of contacts) {
             if (contact === null || force <= 0) {
                 continue;
             }
 
             this.applyLandingGearFriction(
-                    contact,
-                    force,
-                    deltaTime
-                );
-            }
-
-            this.applyForceAtPoint(
-                new Vector2(
-                    contact.normal.x * force,
-                    contact.normal.y * force),
-                    contact.point,
-                    deltaTime
+                contact,
+                force,
+                deltaTime
             );
         }
     }
